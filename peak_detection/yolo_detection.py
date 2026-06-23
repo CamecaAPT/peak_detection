@@ -64,6 +64,10 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
                              molecule_rf_threshold=0.8,
                              followon_mc_vector_rf: bool = False,
                              followon_mc_vector_round_decimals: int = 3,
+                             species_list: list | None = None,
+                             elements_list: list | None = None,
+                             save_artifacts: bool = True,
+                             artifacts_dir: str | None = None,
                              return_accuracy_breakdown: bool = False):
     """
     RangingNN YOLO model prediction wrapper.
@@ -151,18 +155,28 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
         formatted_results.append(PeakRange(start=s, end=e, pos=(s + e) / 2))
 
     # --- RF ELEMENT IDENTIFICATION ---
-    truth_data = parse_rrng(rrng_file)
-    label_map = {simplify_label(str(t.label)): t.label for t in truth_data if t.label and t.label != 'Unknown'}
+    truth_data = parse_rrng(rrng_file) if rrng_file else []
+    if species_list is not None:
+        # Caller supplied expected species directly (mix of elements and molecules);
+        # bypass the RRNG for the RF class list. Molecules are used exactly as before.
+        label_map = {simplify_label(str(s)): str(s) for s in species_list if s and str(s) != 'Unknown'}
+    else:
+        label_map = {simplify_label(str(t.label)): t.label for t in truth_data if t.label and t.label != 'Unknown'}
     truth_species_all = sorted(list(label_map.keys()))
     truth_species_primary = truth_species_all
     if not include_molecules:
         truth_species_primary = [s for s in truth_species_all if not is_molecule(s)]
 
     truth_molecules = [s for s in truth_species_all if is_molecule(s)]
-    
-    elements_for_molecules = extract_elements_from_rrng(rrng_file)
+
+    if elements_list is not None:
+        elements_for_molecules = sorted({str(e) for e in elements_list if e})
+    elif species_list is not None:
+        # Derive base elements from supplied species, mirroring extract_elements_from_rrng.
+        elements_for_molecules = sorted({sym for s in truth_species_all for sym in re.findall(r'[A-Z][a-z]?', s)})
+    else:
+        elements_for_molecules = extract_elements_from_rrng(rrng_file) if rrng_file else []
     prefix_internal = prefix if prefix else os.path.basename(apt_file).split('.')[0].lower()
-    os.makedirs(prefix_internal, exist_ok=True)
     
     def _format_class_list(classes: list[str], max_items: int = 200) -> str:
         if not classes:
@@ -566,11 +580,14 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
         }
         detailed_rows.append(row)
 
-    detailed_results_path = os.path.join(prefix_internal, f"{prefix_internal}_detailed_results.csv")
-    with open(detailed_results_path, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=['predicted peak start', 'predicted peak end', 'true peak start', 'true peak end', 'true element label', 'pred element label 1', 'pred confidence 1', 'pred element label 2', 'pred confidence 2', 'discarded'])
-        writer.writeheader()
-        writer.writerows(detailed_rows)
+    if save_artifacts:
+        out_dir = artifacts_dir or prefix_internal
+        os.makedirs(out_dir, exist_ok=True)
+        detailed_results_path = os.path.join(out_dir, f"{prefix_internal}_detailed_results.csv")
+        with open(detailed_results_path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=['predicted peak start', 'predicted peak end', 'true peak start', 'true peak end', 'true element label', 'pred element label 1', 'pred confidence 1', 'pred element label 2', 'pred confidence 2', 'discarded'])
+            writer.writeheader()
+            writer.writerows(detailed_rows)
 
     # --- UNKNOWN PEAK ERROR REPORT (MC vs TRAINING) ---
     def _parse_unknown_reason(label1: str) -> str:
@@ -582,7 +599,7 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
             return inner
         return ''
 
-    if flag_unknowns and any(bool(r.get('discarded')) for r in detailed_rows):
+    if save_artifacts and flag_unknowns and any(bool(r.get('discarded')) for r in detailed_rows):
         # If RF identification failed early, the mc-distance helpers may not exist.
         # In that case, rebuild the lookup here and define local helpers so the report still writes.
         if 'mc_samples_by_species' not in locals() or not isinstance(mc_samples_by_species, dict) or len(mc_samples_by_species) == 0:
@@ -784,7 +801,9 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
                 'nearest_training_mc_reason_scaled_any': nearest_reason_scaled_any if nearest_reason_scaled_any is not None else '',
             })
 
-        unknown_report_path = os.path.join(prefix_internal, f"{prefix_internal}_unknown_peak_error_report.csv")
+        out_dir = artifacts_dir or prefix_internal
+        os.makedirs(out_dir, exist_ok=True)
+        unknown_report_path = os.path.join(out_dir, f"{prefix_internal}_unknown_peak_error_report.csv")
         try:
             with open(unknown_report_path, 'w', newline='') as f:
                 fieldnames = [
