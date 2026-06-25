@@ -101,6 +101,7 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
                              elements_list: list | None = None,
                              save_artifacts: bool = True,
                              artifacts_dir: str | None = None,
+                             save_args: bool = True,
                              return_accuracy_breakdown: bool = False):
     """
     RangingNN YOLO model prediction wrapper.
@@ -108,7 +109,13 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
     and optionally low top-candidate RF confidence.
     Optionally, a second RF model can be trained on molecular species only and applied to
     peaks flagged as unknown, or to elemental IDs as molecule rescue/mixed top-2 candidates.
+
+    When ``save_args`` is True, a write-only YAML snapshot of the scalar arguments this
+    function was called with is saved to ``{prefix}_yolo_args.yaml`` for reproducibility.
     """
+    # Snapshot of the call arguments, captured before any local variables are introduced.
+    _call_args = {k: v for k, v in locals().items()}
+
     import yaml
     from peak_detection.RangingNN.predictor import DetectionPredictor
 
@@ -263,6 +270,25 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
     else:
         elements_for_molecules = extract_elements_from_rrng(rrng_file) if rrng_file else []
     prefix_internal = prefix if prefix else os.path.basename(apt_file).split('.')[0].lower()
+
+    if save_args:
+        from peak_detection.run_config import _yaml_safe
+        snapshot = {}
+        for k, v in _call_args.items():
+            try:
+                snapshot[k] = _yaml_safe(v)
+            except TypeError:
+                # Drop non-scalar inputs (spectrum_log, x_exp, species/elements lists, tensors).
+                continue
+        out_dir = artifacts_dir or prefix_internal
+        try:
+            os.makedirs(out_dir, exist_ok=True)
+            args_path = os.path.join(out_dir, f"{prefix_internal}_yolo_args.yaml")
+            with open(args_path, 'w') as f:
+                yaml.safe_dump(snapshot, f, sort_keys=True, default_flow_style=False)
+            print(f"  Saved YOLO call arguments: {args_path}")
+        except OSError as e:
+            print(f"  [Warning] Could not save YOLO call arguments: {e}")
 
     def _is_elemental_label(label: str) -> bool:
         try:

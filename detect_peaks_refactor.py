@@ -15,7 +15,6 @@ import sys
 import re
 import csv
 import argparse
-from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -30,19 +29,12 @@ from peak_detection.models import DatasetStats
 from peak_detection.data_io import load_apt_from_file, parse_rrng, extract_elements_from_rrng, save_rrng
 from peak_detection.utils import calculate_iou, calculate_metrics
 from peak_detection.yolo_detection import predict_peak_ranges_yolo, identify_peaks
-
-
-def write_run_cli_args(args, filename=None):
-    """Write the parsed CLI configuration for reproducible analysis runs."""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = filename or f"run_cli_args_{timestamp}.txt"
-    with open(output_path, "w") as f:
-        f.write(f"timestamp = {timestamp}\n")
-        f.write(f"command = {' '.join(sys.argv)}\n\n")
-        for key, value in sorted(vars(args).items()):
-            f.write(f"{key} = {value}\n")
-    print(f"Saved CLI argument log to {output_path}")
-    return output_path
+from peak_detection.run_config import (
+    add_shared_args,
+    apply_config_defaults,
+    config_from_namespace,
+    write_run_config,
+)
 
 
 def plot_yolo_comparison(stats, xlim=None, save_path=None, facecolor=None):
@@ -166,7 +158,7 @@ def process_dataset(
     output_dir: str = None,
     *,
     # YOLO parameters
-    yolo_weights: str = 'best_v0_2026-05-12.pt',
+    yolo_weights: str = 'best_v0_2026-06-23.pt',
     n_iter: int = 0,
     iou: float = 0.01,
     conf: float = 0.05,
@@ -1322,6 +1314,9 @@ def plot_yolo_metrics_summary(all_stats, output_path="yolo_metrics_vs_dataset.pn
 
 def main():
     parser = argparse.ArgumentParser(description="Peak detection for APT data (v2).")
+    parser.add_argument("--config", type=str, default=None,
+                        help="Path to a YAML run-config file. Its values become defaults that "
+                             "explicit CLI flags still override.")
     parser.add_argument("--apt_path", type=str, default='ALL_APT_processedCSV',
                         help="Path to .apt/.csv file or directory for batch mode")
     parser.add_argument("--rrng_path", type=str, default='ALL_RRNG_NEW',
@@ -1329,144 +1324,21 @@ def main():
     parser.add_argument("--output_dir", type=str, default=None,
                         help="Output directory (single mode only; defaults to name from apt_file)")
 
-    # YOLO parameters
-    parser.add_argument("--yolo_weights", type=str, default='best_v0_2026-05-12.pt')
-    parser.add_argument("--n_iter", type=int, default=0)
-    parser.add_argument("--iou", type=float, default=0.01)
-    parser.add_argument("--conf", type=float, default=0.05)
-    parser.add_argument("--max_det", type=int, default=2000)
-    parser.add_argument(
-        "--iter_min_intensity_quantile",
-        type=float,
-        default=0.10,
-        help="For YOLO iterative reruns, use this first-pass peak-intensity quantile to set the minimum intensity gate",
-    )
-    parser.add_argument(
-        "--iter_min_intensity_fraction",
-        type=float,
-        default=0.50,
-        help="For YOLO iterative reruns, require new ranges to be at least this fraction of the first-pass intensity quantile",
-    )
-    parser.add_argument(
-        "--iter_intensity_stat_quantile",
-        type=float,
-        default=0.90,
-        help="Within each candidate range, use this intensity quantile as the robust peak intensity statistic",
-    )
-    parser.add_argument("--mc_min", type=float, default=0.0)
-    parser.add_argument("--mc_max", type=float, default=307.2)
-
-    # RF parameters
-    parser.add_argument("--training_path", type=str,
-                        default='peak_detection/Ionclassifier/training_data/NewData_peakshift0_noise0_newchg/Data0001')
-    parser.add_argument("--training_num_files", type=int, default=10000,
-                        help="Number of synthetic training CSV files to scan (default loads all 10k when present)")
-    parser.add_argument(
-        "--augment_molecule_training_charge_ratios",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Augment molecule training m/c values with charge-state ratios (adds 1/2 and 1/3 m/c samples for molecular species)",
-    )
-    parser.add_argument(
-        "--molecule_rf_rescue_elements",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Run a molecule-only RF pass on peaks currently labeled as single elements and allow molecule overrides or mixed element+molecule top-2 candidates",
-    )
-    parser.add_argument("--molecule_rf_rescue_threshold", type=float, default=0.8, help="Min molecule RF confidence to accept a molecule rescue candidate")
-    parser.add_argument("--molecule_rf_rescue_margin", type=float, default=0.15, help="Confidence margin for molecule rescue: above element by this amount overrides; within this amount may be stored as mixed top-2")
-    parser.add_argument("--molecule_rf_rescue_score_margin", type=float, default=0.05, help="Quality-weighted score margin for molecule rescue overrides or mixed top-2 candidates")
-    parser.add_argument("--molecule_rf_rescue_dist_margin", type=float, default=0.05, help="m/c distance tolerance for molecule rescue; strict improvements can override, close overlaps can become mixed top-2")
-    parser.add_argument("--include_molecules", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--use_neighborhood", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--neighbor_threshold", type=float, default=2.0)
-    parser.add_argument("--use_signature", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--unknown_molecule_rf", action=argparse.BooleanOptionalAction, default=False,
-                        help="Train a molecule-only RF and apply it only to peaks flagged as unknown")
-    parser.add_argument("--unknown_molecule_rf_threshold", type=float, default=0.8,
-                        help="Min confidence for molecule-only RF to un-flag an unknown peak")
-    parser.add_argument("--followon_mc_vector_rf", action=argparse.BooleanOptionalAction, default=False,
-                        help="Run a follow-on RF using a padded vector of unique m/c values per predicted species-group")
-    parser.add_argument("--followon_mc_vector_round_decimals", type=int, default=3,
-                        help="Rounding decimals used when determining unique m/c values for the follow-on mc-vector RF")
-
-    # Unknown flagging
-    parser.add_argument("--flag_unknowns", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--mc_threshold", type=float, default=0.2)
-    parser.add_argument(
-        "--unknown_confidence_threshold",
-        type=float,
-        default=0.6,
-        help="Flag RF IDs as Unknown when the top candidate confidence is below this cutoff; set <=0 to disable",
-    )
-    parser.add_argument(
-        "--rf_accuracy_top_n",
-        type=int,
-        default=1,
-        help="Consider the top N stored RF candidates when scoring element/molecule classification accuracy",
-    )
-    parser.add_argument(
-        "--context_rescore",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Use nearby peak labels to rescore ambiguous RF candidates after initial classification",
-    )
-    parser.add_argument(
-        "--context_window_da",
-        type=float,
-        default=2.0,
-        help="m/c window around a peak used to collect neighboring RF label support for context rescoring",
-    )
-    parser.add_argument(
-        "--context_strength",
-        type=float,
-        default=0.35,
-        help="Weight applied to neighboring-label support during context rescoring",
-    )
-    parser.add_argument(
-        "--context_min_confidence",
-        type=float,
-        default=0.75,
-        help="Only rescore peaks that are Unknown or whose top RF confidence is below this value",
-    )
-    parser.add_argument(
-        "--context_min_candidate_confidence",
-        type=float,
-        default=0.05,
-        help="Minimum RF candidate confidence for a label to be eligible during context rescoring",
-    )
-    parser.add_argument(
-        "--context_override_margin",
-        type=float,
-        default=0.05,
-        help="Require the context-adjusted winning score to beat the original top candidate by this margin",
-    )
-    parser.add_argument(
-        "--context_distance_sigma",
-        type=float,
-        default=0.75,
-        help="Gaussian distance scale, in Da, for weighting nearby peaks during context rescoring",
-    )
-    parser.add_argument(
-        "--context_rescue_unknown_same_label",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="When context rescoring is enabled, unflag Unknown peaks if nearby context strongly supports their existing top RF candidate",
-    )
-    parser.add_argument(
-        "--context_rescue_unknown_min_score",
-        type=float,
-        default=0.7,
-        help="Minimum context-adjusted score needed to unflag an Unknown peak whose top RF candidate remains the winner",
-    )
+    # Shared YOLO / RF / unknown-flagging / context-rescoring parameters
+    # (single source of truth: peak_detection/run_config.py).
+    add_shared_args(parser)
 
     # Output control
     parser.add_argument("--save_plots", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--save_rrng_output", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--save_csv", action=argparse.BooleanOptionalAction, default=True)
 
+    # Apply --config YAML as defaults (explicit CLI flags still override), then parse.
+    apply_config_defaults(parser)
     args = parser.parse_args()
-    write_run_cli_args(args)
+
+    cfg = config_from_namespace(args)
+    write_run_config(cfg)
 
     apt_path = args.apt_path
     rrng_path = args.rrng_path
@@ -1475,47 +1347,9 @@ def main():
         print(f"Error: Path not found:\n  APT: {apt_path}\n  RRNG: {rrng_path}")
         sys.exit(1)
 
-    # Build common kwargs from args
+    # Shared params come from the RunConfig; output-control flags are script-specific.
     common_kwargs = {
-        'yolo_weights': args.yolo_weights,
-        'n_iter': args.n_iter,
-        'iou': args.iou,
-        'conf': args.conf,
-        'max_det': args.max_det,
-        'iter_min_intensity_quantile': args.iter_min_intensity_quantile,
-        'iter_min_intensity_fraction': args.iter_min_intensity_fraction,
-        'iter_intensity_stat_quantile': args.iter_intensity_stat_quantile,
-        'mc_min': args.mc_min,
-        'mc_max': args.mc_max,
-        'training_path': args.training_path,
-        'training_num_files': args.training_num_files,
-        'augment_molecule_training_charge_ratios': args.augment_molecule_training_charge_ratios,
-        'molecule_rf_rescue_elements': args.molecule_rf_rescue_elements,
-        'molecule_rf_rescue_threshold': args.molecule_rf_rescue_threshold,
-        'molecule_rf_rescue_margin': args.molecule_rf_rescue_margin,
-        'molecule_rf_rescue_score_margin': args.molecule_rf_rescue_score_margin,
-        'molecule_rf_rescue_dist_margin': args.molecule_rf_rescue_dist_margin,
-        'include_molecules': args.include_molecules,
-        'use_neighborhood': args.use_neighborhood,
-        'neighbor_threshold': args.neighbor_threshold,
-        'use_signature': args.use_signature,
-        'unknown_molecule_rf': args.unknown_molecule_rf,
-        'unknown_molecule_rf_threshold': args.unknown_molecule_rf_threshold,
-        'followon_mc_vector_rf': args.followon_mc_vector_rf,
-        'followon_mc_vector_round_decimals': args.followon_mc_vector_round_decimals,
-        'flag_unknowns': args.flag_unknowns,
-        'mc_threshold': args.mc_threshold,
-        'unknown_confidence_threshold': args.unknown_confidence_threshold,
-        'rf_accuracy_top_n': args.rf_accuracy_top_n,
-        'context_rescore': args.context_rescore,
-        'context_window_da': args.context_window_da,
-        'context_strength': args.context_strength,
-        'context_min_confidence': args.context_min_confidence,
-        'context_min_candidate_confidence': args.context_min_candidate_confidence,
-        'context_override_margin': args.context_override_margin,
-        'context_distance_sigma': args.context_distance_sigma,
-        'context_rescue_unknown_same_label': args.context_rescue_unknown_same_label,
-        'context_rescue_unknown_min_score': args.context_rescue_unknown_min_score,
+        **cfg.to_kwargs(),
         'save_plots': args.save_plots,
         'save_rrng_output': args.save_rrng_output,
         'save_csv': args.save_csv,
