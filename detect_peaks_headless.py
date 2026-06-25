@@ -46,6 +46,7 @@ from peak_detection.data_io import (
     save_rrng,
 )
 from peak_detection.yolo_detection import predict_peak_ranges_yolo
+from peak_detection.training import set_progress_min_fraction
 
 
 def _resolve_expected_species(elements=None, expected_rrng=None):
@@ -130,6 +131,8 @@ def detect_peaks_headless(
     mc_threshold: float = 0.2,
     unknown_confidence_threshold: float = 0.6,
     rf_accuracy_top_n: int = 1,
+    # Progress reporting
+    progress_min_fraction: float = None,
     # Context rescoring
     context_rescore: bool = False,
     context_window_da: float = 2.0,
@@ -149,6 +152,8 @@ def detect_peaks_headless(
     Diagnostic CSVs are written only when `save_artifacts=True` (into
     `artifacts_dir` if given, otherwise a dataset-named folder).
     """
+    set_progress_min_fraction(progress_min_fraction)
+
     species_list, elements_list = _resolve_expected_species(elements, expected_rrng)
 
     if not os.path.exists(input_file):
@@ -323,6 +328,11 @@ def main():
     parser.add_argument("--context-rescue-unknown-min-score", type=float, default=0.7,
                         help="Minimum context-adjusted score needed to unflag an Unknown peak whose top RF candidate remains the winner")
 
+    # Progress reporting
+    parser.add_argument("--progress-min-fraction", type=float, default=None,
+                        help="Throttle training-data progress bars to ~one update per this "
+                             "fraction of progress (e.g. 0.2 = every 20%%). Default: continuous.")
+
     args = parser.parse_args()
 
     try:
@@ -364,6 +374,7 @@ def main():
             flag_unknowns=args.flag_unknowns,
             mc_threshold=args.mc_threshold,
             unknown_confidence_threshold=args.unknown_confidence_threshold,
+            progress_min_fraction=args.progress_min_fraction,
             rf_accuracy_top_n=args.rf_accuracy_top_n,
             context_rescore=args.context_rescore,
             context_window_da=args.context_window_da,

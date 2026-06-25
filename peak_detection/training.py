@@ -8,6 +8,42 @@ from .utils import simplify_label, is_molecule
 from .rf_model import get_signature_features
 
 
+# --- Optional progress throttling ------------------------------------------------
+# When set to a fraction in (0, 1], the training-data tqdm bars below refresh roughly
+# once per that fraction of progress (e.g. 0.2 -> ~ every 20%) instead of continuously.
+# None (default) keeps tqdm's current update rate. Set via set_progress_min_fraction()
+# so public entry points can plumb it without threading it through every loader.
+_progress_min_fraction = None
+
+
+def set_progress_min_fraction(fraction):
+    """Throttle the training-data tqdm bars to ~one update per `fraction` of progress.
+
+    Pass a value in (0, 1] (e.g. 0.2 for every 20%). None preserves the current
+    continuous update rate.
+    """
+    global _progress_min_fraction
+    _progress_min_fraction = fraction
+
+
+def _tqdm(iterable, **kwargs):
+    """tqdm wrapper that honors the module-level progress throttle when set."""
+    fraction = _progress_min_fraction
+    if fraction and fraction > 0:
+        total = kwargs.get('total')
+        if total is None:
+            try:
+                total = len(iterable)
+            except TypeError:
+                total = None
+        if total and total > 0:
+            # Explicit miniters disables tqdm's dynamic adjustment; mininterval=0 lets
+            # miniters alone gate refreshes (~one per `fraction` of the iterations).
+            kwargs.setdefault('mininterval', 0)
+            kwargs.setdefault('miniters', max(1, int(total * fraction)))
+    return tqdm(iterable, **kwargs)
+
+
 def load_ion_training_data(path='peak_detection/Ionclassifier/training_data/NewData/Data0001',
                            element_list=list(),
                            elements_to_get_molecules=list(),
@@ -46,7 +82,7 @@ def load_ion_training_data(path='peak_detection/Ionclassifier/training_data/NewD
     max_neigh = 0
 
     raw_data_per_file = []
-    for file in tqdm(files, desc='Loading and parsing classifier training data'):
+    for file in _tqdm(files, desc='Loading and parsing classifier training data'):
         df = pd.read_csv(os.path.join(path, file), keep_default_na=False)
         mc = df.get(['mc']).to_numpy().squeeze()
         counts = df.get(['counts']).to_numpy().squeeze()
@@ -304,7 +340,7 @@ def load_ion_training_data_mc_vector(
     grouped_samples: list[tuple[list[float], str]] = []
     max_len = 0
 
-    for file in tqdm(files, desc='Loading and grouping training data (mc-vector)'):
+    for file in _tqdm(files, desc='Loading and grouping training data (mc-vector)'):
         df = pd.read_csv(os.path.join(path, file), keep_default_na=False)
         if 'ion' not in df.columns or 'mc' not in df.columns or 'counts' not in df.columns:
             continue
