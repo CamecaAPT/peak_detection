@@ -32,6 +32,7 @@ Usage:
 
 import os
 import sys
+import time
 import argparse
 
 # Ensure project root is on path for the peak_detection package.
@@ -53,6 +54,12 @@ from peak_detection.run_config import (
     config_from_namespace,
     write_run_config,
 )
+
+# Script-specific tunables (beyond the shared RunConfig) that are persisted to / loadable
+# from the run-config YAML. Per-run I/O paths and expected-species inputs are deliberately
+# omitted (those change every run and the `command` header records them).
+SCRIPT_CONFIG_KEYS = ['save_artifacts', 'save_peak_ranges_txt',
+                      'separate_molecule_rf', 'progress_min_fraction']
 
 
 def _resolve_expected_species(elements=None, expected_rrng=None):
@@ -159,6 +166,7 @@ def detect_peaks_headless(
     `artifacts_dir` if given, otherwise a dataset-named folder).
     """
     set_progress_min_fraction(progress_min_fraction)
+    _t_file = time.perf_counter()
 
     species_list, elements_list = _resolve_expected_species(elements, expected_rrng)
 
@@ -235,6 +243,8 @@ def detect_peaks_headless(
                 f.write(f"{p.start:.4f}, {p.end:.4f}, 1, {p.pos:.4f}\n")
         print(f"Peak ranges text written: {ranges_txt}")
 
+    print(f"Total processing time for {os.path.basename(input_file)}: {time.perf_counter() - _t_file:.2f}s")
+
     return detected
 
 
@@ -290,7 +300,9 @@ def main():
     args = parser.parse_args()
 
     cfg = config_from_namespace(args)
-    write_run_config(cfg)
+    # Script-specific tunables to persist in the run config (I/O paths + expected-species
+    # inputs are excluded). These load back via --config too.
+    write_run_config(cfg, extra={k: getattr(args, k) for k in SCRIPT_CONFIG_KEYS})
 
     try:
         detect_peaks_headless(

@@ -14,6 +14,7 @@ import os
 import sys
 import re
 import csv
+import time
 import argparse
 from pathlib import Path
 
@@ -35,6 +36,10 @@ from peak_detection.run_config import (
     config_from_namespace,
     write_run_config,
 )
+
+# Script-specific output-control tunables (beyond the shared RunConfig) that are persisted
+# to / loadable from the run-config YAML. Per-run I/O paths are deliberately omitted.
+SCRIPT_CONFIG_KEYS = ['save_plots', 'save_csv', 'save_rrng_output']
 
 
 def plot_yolo_comparison(stats, xlim=None, save_path=None, facecolor=None):
@@ -211,6 +216,7 @@ def process_dataset(
 
     Returns a DatasetStats with metrics, detected_ranges, identifications, etc.
     """
+    _t_file = time.perf_counter()
     rf_accuracy = 0.0
     rf_accuracy_ele = 0.0
     unknown_count = 0
@@ -544,6 +550,8 @@ def process_dataset(
                     continue
                 slice_path = os.path.join(output_dir, f"{output_dir}_yolo_1d_model_comparison_zoom_{lo}_{hi}.png")
                 plot_yolo_comparison(stats, xlim=(float(lo), float(hi)), save_path=slice_path)
+
+    print(f"Total processing time for {output_dir}: {time.perf_counter() - _t_file:.2f}s")
 
     return stats
 
@@ -1338,7 +1346,9 @@ def main():
     args = parser.parse_args()
 
     cfg = config_from_namespace(args)
-    write_run_config(cfg)
+    # Script-specific tunables to persist in the run config (I/O paths are intentionally
+    # excluded; the `command` header records those). These load back via --config too.
+    write_run_config(cfg, extra={k: getattr(args, k) for k in SCRIPT_CONFIG_KEYS})
 
     apt_path = args.apt_path
     rrng_path = args.rrng_path

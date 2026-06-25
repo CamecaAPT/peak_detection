@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import csv
 import re
+import time
 import bisect
 import numpy as np
 import torch
@@ -12,8 +13,57 @@ from pymatgen.core import Composition
 from .models import DetailedId, PeakRange
 from .utils import calculate_iou, calculate_iou_1d, is_molecule, simplify_label
 from .data_io import parse_rrng, extract_elements_from_rrng
-from .training import load_ion_training_data, load_ion_training_data_mc_vector, build_empirical_mc_samples
-from .rf_model import create_RF_model, run_RF_model
+from .training import (
+    load_ion_training_data as _load_ion_training_data,
+    load_ion_training_data_mc_vector as _load_ion_training_data_mc_vector,
+    build_empirical_mc_samples,
+)
+from .rf_model import (
+    create_RF_model as _create_RF_model,
+    run_RF_model as _run_RF_model,
+)
+
+# --- Lightweight per-call step-timing accumulator -------------------------------------
+# predict_peak_ranges_yolo clears this at entry and reports it before returning. The RF
+# training/inference functions below are thin timed wrappers around the real ones, so every
+# call site is timed without changing any of them. (Single-threaded, sequential use only.)
+_STEP_TIMINGS: dict[str, float] = {}
+
+
+def _accumulate_time(key: str, seconds: float) -> None:
+    _STEP_TIMINGS[key] = _STEP_TIMINGS.get(key, 0.0) + seconds
+
+
+def load_ion_training_data(*args, **kwargs):
+    t0 = time.perf_counter()
+    try:
+        return _load_ion_training_data(*args, **kwargs)
+    finally:
+        _accumulate_time('rf_train', time.perf_counter() - t0)
+
+
+def load_ion_training_data_mc_vector(*args, **kwargs):
+    t0 = time.perf_counter()
+    try:
+        return _load_ion_training_data_mc_vector(*args, **kwargs)
+    finally:
+        _accumulate_time('rf_train', time.perf_counter() - t0)
+
+
+def create_RF_model(*args, **kwargs):
+    t0 = time.perf_counter()
+    try:
+        return _create_RF_model(*args, **kwargs)
+    finally:
+        _accumulate_time('rf_train', time.perf_counter() - t0)
+
+
+def run_RF_model(*args, **kwargs):
+    t0 = time.perf_counter()
+    try:
+        return _run_RF_model(*args, **kwargs)
+    finally:
+        _accumulate_time('rf_infer', time.perf_counter() - t0)
 
 
 def remove_peaks_and_patch(spectrum: np.ndarray, detected_ranges: list[PeakRange], window: int = 10) -> np.ndarray:
@@ -116,6 +166,10 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
     # Snapshot of the call arguments, captured before any local variables are introduced.
     _call_args = {k: v for k, v in locals().items()}
 
+    # Reset per-call step timings (ranging is recorded below; RF train/infer accumulate
+    # via the timed wrappers above).
+    _STEP_TIMINGS.clear()
+
     import yaml
     from peak_detection.RangingNN.predictor import DetectionPredictor
 
@@ -163,6 +217,7 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
     else:
         sp_padded = spectrum_log[:30720]
 
+    _t_ranging = time.perf_counter()
     predictor = DetectionPredictor(modelpath, sp_padded[None, None, ...], save_dir='test_results', cfg=cfg)
     result = predictor()[0]
     peak_range_pred = result[:, :2].cpu()
@@ -240,6 +295,8 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
                     current_peak_ranges.append([start, end])
                     added_this_iter += 1
             print(f"  YOLO iterative pass {it + 1}/{n_iter}: added {added_this_iter} new ranges")
+
+    _accumulate_time('ranging', time.perf_counter() - _t_ranging)
 
     final_ranges = current_peak_ranges
     formatted_results = []
@@ -1519,6 +1576,13 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
 
     accuracy_pct = float(after_rescue_breakdown.get('species_excluding_unknowns', 0.0) or 0.0)
     accuracy_pct_ele = float(after_rescue_breakdown.get('elemental_excluding_unknowns', 0.0) or 0.0)
+
+    print(
+        "  Step timing: "
+        f"ranging {_STEP_TIMINGS.get('ranging', 0.0):.2f}s | "
+        f"RF training (incl. data load) {_STEP_TIMINGS.get('rf_train', 0.0):.2f}s | "
+        f"RF inference {_STEP_TIMINGS.get('rf_infer', 0.0):.2f}s"
+    )
 
     if return_accuracy_breakdown:
         return (

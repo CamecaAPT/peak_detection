@@ -277,11 +277,22 @@ def load_config_yaml(path: str) -> dict:
     return data
 
 
-def write_run_config(cfg: "RunConfig", path: str | None = None) -> str:
-    """Write the effective config to YAML (plus command/timestamp header). Returns the path."""
+def write_run_config(cfg: "RunConfig", path: str | None = None,
+                     extra: dict | None = None) -> str:
+    """Write the effective config to YAML (plus command/timestamp header). Returns the path.
+
+    ``extra`` is an optional ``{name: value}`` mapping of script-specific tunables to persist
+    alongside the shared params (sanitized to scalars). They load back via
+    ``apply_config_defaults`` exactly like any other known argument, so a script can round-trip
+    its own settings; keys a different script doesn't recognise are simply ignored on load.
+    Keep per-run I/O paths out of ``extra`` — the ``command`` header already records them.
+    """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = path or f"run_config_{timestamp}.yaml"
     data = config_to_dict(cfg)
+    if extra:
+        for k, v in extra.items():
+            data[k] = _yaml_safe(v)
     data["command"] = " ".join(sys.argv)
     data["timestamp"] = timestamp
     with open(path, "w") as f:
