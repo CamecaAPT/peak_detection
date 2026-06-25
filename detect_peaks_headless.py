@@ -102,12 +102,20 @@ def detect_peaks_headless(
     iou: float = 0.01,
     conf: float = 0.05,
     max_det: int = 2000,
+    iter_min_intensity_quantile: float = 0.10,
+    iter_min_intensity_fraction: float = 0.50,
+    iter_intensity_stat_quantile: float = 0.90,
     mc_min: float = 0.0,
     mc_max: float = 307.2,
     # RF parameters
     training_path: str = None,
     training_num_files: int = 10000,
     augment_molecule_training_charge_ratios: bool = False,
+    molecule_rf_rescue_elements: bool = False,
+    molecule_rf_rescue_threshold: float = 0.8,
+    molecule_rf_rescue_margin: float = 0.15,
+    molecule_rf_rescue_score_margin: float = 0.05,
+    molecule_rf_rescue_dist_margin: float = 0.05,
     include_molecules: bool = False,
     use_neighborhood: bool = False,
     neighbor_threshold: float = 2.0,
@@ -120,6 +128,18 @@ def detect_peaks_headless(
     # Unknown flagging
     flag_unknowns: bool = True,
     mc_threshold: float = 0.2,
+    unknown_confidence_threshold: float = 0.6,
+    rf_accuracy_top_n: int = 1,
+    # Context rescoring
+    context_rescore: bool = False,
+    context_window_da: float = 2.0,
+    context_strength: float = 0.35,
+    context_min_confidence: float = 0.75,
+    context_min_candidate_confidence: float = 0.05,
+    context_override_margin: float = 0.05,
+    context_distance_sigma: float = 0.75,
+    context_rescue_unknown_same_label: bool = True,
+    context_rescue_unknown_min_score: float = 0.7,
 ):
     """
     Detect and identify peaks for a single dataset and write a range (.rrng)
@@ -152,14 +172,33 @@ def detect_peaks_headless(
         training_path=training_path,
         training_num_files=training_num_files,
         augment_molecule_training_charge_ratios=augment_molecule_training_charge_ratios,
+        molecule_rf_rescue_elements=molecule_rf_rescue_elements,
+        molecule_rf_rescue_threshold=molecule_rf_rescue_threshold,
+        molecule_rf_rescue_margin=molecule_rf_rescue_margin,
+        molecule_rf_rescue_score_margin=molecule_rf_rescue_score_margin,
+        molecule_rf_rescue_dist_margin=molecule_rf_rescue_dist_margin,
         include_molecules=include_molecules,
         yolo_weights=yolo_weights, iou=iou, conf=conf, max_det=max_det,
+        iter_min_intensity_quantile=iter_min_intensity_quantile,
+        iter_min_intensity_fraction=iter_min_intensity_fraction,
+        iter_intensity_stat_quantile=iter_intensity_stat_quantile,
         mc_min=mc_min, mc_max=mc_max,
         use_neighborhood=use_neighborhood, neighbor_threshold=neighbor_threshold,
         use_signature=use_signature,
         separate_molecule_rf=separate_molecule_rf,
         unknown_molecule_rf=unknown_molecule_rf,
         molecule_rf_threshold=unknown_molecule_rf_threshold,
+        unknown_confidence_threshold=unknown_confidence_threshold,
+        rf_accuracy_top_n=rf_accuracy_top_n,
+        context_rescore=context_rescore,
+        context_window_da=context_window_da,
+        context_strength=context_strength,
+        context_min_confidence=context_min_confidence,
+        context_min_candidate_confidence=context_min_candidate_confidence,
+        context_override_margin=context_override_margin,
+        context_distance_sigma=context_distance_sigma,
+        context_rescue_unknown_same_label=context_rescue_unknown_same_label,
+        context_rescue_unknown_min_score=context_rescue_unknown_min_score,
         followon_mc_vector_rf=followon_mc_vector_rf,
         followon_mc_vector_round_decimals=followon_mc_vector_round_decimals,
         species_list=species_list,
@@ -221,6 +260,12 @@ def main():
     parser.add_argument("--iou", type=float, default=0.01)
     parser.add_argument("--conf", type=float, default=0.05)
     parser.add_argument("--max-det", type=int, default=2000)
+    parser.add_argument("--iter-min-intensity-quantile", type=float, default=0.10,
+                        help="For YOLO iterative reruns, use this first-pass peak-intensity quantile to set the minimum intensity gate")
+    parser.add_argument("--iter-min-intensity-fraction", type=float, default=0.50,
+                        help="For YOLO iterative reruns, require new ranges to be at least this fraction of the first-pass intensity quantile")
+    parser.add_argument("--iter-intensity-stat-quantile", type=float, default=0.90,
+                        help="Within each candidate range, use this intensity quantile as the robust peak intensity statistic")
     parser.add_argument("--mc-min", type=float, default=0.0)
     parser.add_argument("--mc-max", type=float, default=307.2)
 
@@ -230,6 +275,16 @@ def main():
     parser.add_argument("--training-num-files", type=int, default=10000)
     parser.add_argument("--augment-molecule-training-charge-ratios",
                         action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--molecule-rf-rescue-elements", action=argparse.BooleanOptionalAction, default=False,
+                        help="Run a molecule-only RF pass on peaks currently labeled as single elements and allow molecule overrides or mixed element+molecule top-2 candidates")
+    parser.add_argument("--molecule-rf-rescue-threshold", type=float, default=0.8,
+                        help="Min molecule RF confidence to accept a molecule rescue candidate")
+    parser.add_argument("--molecule-rf-rescue-margin", type=float, default=0.15,
+                        help="Confidence margin for molecule rescue: above element by this amount overrides; within this amount may be stored as mixed top-2")
+    parser.add_argument("--molecule-rf-rescue-score-margin", type=float, default=0.05,
+                        help="Quality-weighted score margin for molecule rescue overrides or mixed top-2 candidates")
+    parser.add_argument("--molecule-rf-rescue-dist-margin", type=float, default=0.05,
+                        help="m/c distance tolerance for molecule rescue; strict improvements can override, close overlaps can become mixed top-2")
     parser.add_argument("--include-molecules", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--use-neighborhood", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--neighbor-threshold", type=float, default=2.0)
@@ -243,6 +298,30 @@ def main():
     # Unknown flagging
     parser.add_argument("--flag-unknowns", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--mc-threshold", type=float, default=0.2)
+    parser.add_argument("--unknown-confidence-threshold", type=float, default=0.6,
+                        help="Flag RF IDs as Unknown when the top candidate confidence is below this cutoff; set <=0 to disable")
+    parser.add_argument("--rf-accuracy-top-n", type=int, default=1,
+                        help="Consider the top N stored RF candidates when scoring element/molecule classification accuracy")
+
+    # Context rescoring
+    parser.add_argument("--context-rescore", action=argparse.BooleanOptionalAction, default=False,
+                        help="Use nearby peak labels to rescore ambiguous RF candidates after initial classification")
+    parser.add_argument("--context-window-da", type=float, default=2.0,
+                        help="m/c window around a peak used to collect neighboring RF label support for context rescoring")
+    parser.add_argument("--context-strength", type=float, default=0.35,
+                        help="Weight applied to neighboring-label support during context rescoring")
+    parser.add_argument("--context-min-confidence", type=float, default=0.75,
+                        help="Only rescore peaks that are Unknown or whose top RF confidence is below this value")
+    parser.add_argument("--context-min-candidate-confidence", type=float, default=0.05,
+                        help="Minimum RF candidate confidence for a label to be eligible during context rescoring")
+    parser.add_argument("--context-override-margin", type=float, default=0.05,
+                        help="Require the context-adjusted winning score to beat the original top candidate by this margin")
+    parser.add_argument("--context-distance-sigma", type=float, default=0.75,
+                        help="Gaussian distance scale, in Da, for weighting nearby peaks during context rescoring")
+    parser.add_argument("--context-rescue-unknown-same-label", action=argparse.BooleanOptionalAction, default=True,
+                        help="When context rescoring is enabled, unflag Unknown peaks if nearby context strongly supports their existing top RF candidate")
+    parser.add_argument("--context-rescue-unknown-min-score", type=float, default=0.7,
+                        help="Minimum context-adjusted score needed to unflag an Unknown peak whose top RF candidate remains the winner")
 
     args = parser.parse_args()
 
@@ -260,11 +339,19 @@ def main():
             iou=args.iou,
             conf=args.conf,
             max_det=args.max_det,
+            iter_min_intensity_quantile=args.iter_min_intensity_quantile,
+            iter_min_intensity_fraction=args.iter_min_intensity_fraction,
+            iter_intensity_stat_quantile=args.iter_intensity_stat_quantile,
             mc_min=args.mc_min,
             mc_max=args.mc_max,
             training_path=args.training_path,
             training_num_files=args.training_num_files,
             augment_molecule_training_charge_ratios=args.augment_molecule_training_charge_ratios,
+            molecule_rf_rescue_elements=args.molecule_rf_rescue_elements,
+            molecule_rf_rescue_threshold=args.molecule_rf_rescue_threshold,
+            molecule_rf_rescue_margin=args.molecule_rf_rescue_margin,
+            molecule_rf_rescue_score_margin=args.molecule_rf_rescue_score_margin,
+            molecule_rf_rescue_dist_margin=args.molecule_rf_rescue_dist_margin,
             include_molecules=args.include_molecules,
             use_neighborhood=args.use_neighborhood,
             neighbor_threshold=args.neighbor_threshold,
@@ -276,6 +363,17 @@ def main():
             followon_mc_vector_round_decimals=args.followon_mc_vector_round_decimals,
             flag_unknowns=args.flag_unknowns,
             mc_threshold=args.mc_threshold,
+            unknown_confidence_threshold=args.unknown_confidence_threshold,
+            rf_accuracy_top_n=args.rf_accuracy_top_n,
+            context_rescore=args.context_rescore,
+            context_window_da=args.context_window_da,
+            context_strength=args.context_strength,
+            context_min_confidence=args.context_min_confidence,
+            context_min_candidate_confidence=args.context_min_candidate_confidence,
+            context_override_margin=args.context_override_margin,
+            context_distance_sigma=args.context_distance_sigma,
+            context_rescue_unknown_same_label=args.context_rescue_unknown_same_label,
+            context_rescue_unknown_min_score=args.context_rescue_unknown_min_score,
         )
     except (ValueError, FileNotFoundError, RuntimeError) as e:
         print(f"Error: {e}")
