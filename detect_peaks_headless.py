@@ -183,6 +183,11 @@ def detect_peaks_headless(
     # prefix only matters for diagnostic-CSV filenames when save_artifacts is on.
     prefix = os.path.splitext(os.path.basename(output_rrng))[0]
 
+    # Default diagnostic/args output to the output range file's directory so per-call files
+    # (e.g. the YOLO args snapshot) sit next to the result instead of in a stray CWD folder.
+    if not artifacts_dir:
+        artifacts_dir = os.path.dirname(os.path.abspath(output_rrng))
+
     detected, _, _rf_acc, _rf_acc_ele, _unknown_count = predict_peak_ranges_yolo(
         input_file, spectrum_log, x, None,  # rrng_file=None -> no truth/eval
         n_iter=n_iter, prefix=prefix,
@@ -301,8 +306,10 @@ def main():
 
     cfg = config_from_namespace(args)
     # Script-specific tunables to persist in the run config (I/O paths + expected-species
-    # inputs are excluded). These load back via --config too.
-    write_run_config(cfg, extra={k: getattr(args, k) for k in SCRIPT_CONFIG_KEYS})
+    # inputs are excluded). These load back via --config too. The YAML is written into the
+    # output range file's directory so it sits alongside the result.
+    write_run_config(cfg, extra={k: getattr(args, k) for k in SCRIPT_CONFIG_KEYS},
+                     directory=os.path.dirname(os.path.abspath(args.output_rrng)))
 
     try:
         detect_peaks_headless(

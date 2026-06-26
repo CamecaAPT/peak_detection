@@ -42,6 +42,13 @@ from peak_detection.run_config import (
 SCRIPT_CONFIG_KEYS = ['save_plots', 'save_csv', 'save_rrng_output']
 
 
+def _default_output_dir(apt_file):
+    """Derive a filesystem-safe per-dataset folder name from an APT/CSV file path."""
+    name = os.path.splitext(os.path.basename(apt_file))[0].lower()
+    name = re.sub(r'[^a-zA-Z0-9]', '_', name).strip('_')
+    return re.sub(r'_+', '_', name)
+
+
 def plot_yolo_comparison(stats, xlim=None, save_path=None, facecolor=None):
     """
     Plot YOLO prediction vs truth ranges on top of the spectrum.
@@ -222,11 +229,13 @@ def process_dataset(
     unknown_count = 0
 
     if output_dir is None:
-        output_dir = os.path.splitext(os.path.basename(apt_file))[0].lower()
-        output_dir = re.sub(r'[^a-zA-Z0-9]', '_', output_dir).strip('_')
-        output_dir = re.sub(r'_+', '_', output_dir)
+        output_dir = _default_output_dir(apt_file)
 
-    print(f"\nDetecting peaks for {output_dir} (Zoom: {xlim})...")
+    # output_dir is the directory to write into; prefix names the files within it, so a nested
+    # path like results/R7001 yields results/R7001/R7001_*.csv rather than a doubled path.
+    prefix = os.path.basename(os.path.normpath(output_dir)) or output_dir
+
+    print(f"\nDetecting peaks for {prefix} (Zoom: {xlim})...")
     x, spectrum, spectrum_log = load_apt_from_file(apt_file)
 
     y_mapped = spectrum_log.numpy()
@@ -238,21 +247,21 @@ def process_dataset(
     elements_for_molecules = extract_elements_from_rrng(rrng_file)
 
     os.makedirs(output_dir, exist_ok=True)
-    with open(os.path.join(output_dir, f"{output_dir}_rf_elements.txt"), 'w') as f:
+    with open(os.path.join(output_dir, f"{prefix}_rf_elements.txt"), 'w') as f:
         f.write("--- Suggested RF Classes (Species) ---\n")
         f.write("\n".join(truth_species))
         f.write("\n\n--- Base Elements for Permutations ---\n")
         f.write("\n".join(sorted(elements_for_molecules)))
 
-    with open(os.path.join(output_dir, f"{output_dir}_true_species.txt"), 'w') as f:
+    with open(os.path.join(output_dir, f"{prefix}_true_species.txt"), 'w') as f:
         f.write("\n".join(truth_species))
 
-    print(f"  Metadata saved: {output_dir}/{output_dir}_rf_elements.txt, {output_dir}/{output_dir}_true_species.txt")
+    print(f"  Metadata saved: {output_dir}/{prefix}_rf_elements.txt, {output_dir}/{prefix}_true_species.txt")
 
     # --- RF ELEMENT IDENTIFICATION ---
     all_predicted, _, rf_accuracy, rf_accuracy_ele, unknown_count, rf_accuracy_breakdown = predict_peak_ranges_yolo(
         apt_file, spectrum_log, x, rrng_file,
-        n_iter=n_iter, prefix=output_dir,
+        n_iter=n_iter, prefix=prefix, artifacts_dir=output_dir,
         flag_unknowns=flag_unknowns,
         mc_threshold=mc_threshold,
         training_path=training_path, training_num_files=training_num_files, include_molecules=include_molecules,
@@ -466,7 +475,7 @@ def process_dataset(
     identified_peaks = identify_peaks(all_predicted, x, spectrum_log, allowed_elements=elements_for_molecules)
 
     stats = DatasetStats(
-        dataset=output_dir,
+        dataset=prefix,
         true_peaks_count=len(truth),
         predicted_peaks_count=len(all_predicted),
         found_peaks_count=tp_count,
@@ -520,7 +529,7 @@ def process_dataset(
 
     # --- SAVE PEAK RANGES ---
     if xlim is None:
-        results_file = os.path.join(output_dir, f"{output_dir}_peak_ranges.txt")
+        results_file = os.path.join(output_dir, f"{prefix}_peak_ranges.txt")
         with open(results_file, 'w') as f:
             f.write("peak_start, peak_end, round, peak_pos\n")
             for p in detected1:
@@ -529,7 +538,7 @@ def process_dataset(
 
     # --- SAVE RRNG ---
     if save_rrng_output:
-        rrng_out_path = os.path.join(output_dir, f"{output_dir}_predicted.RRNG")
+        rrng_out_path = os.path.join(output_dir, f"{prefix}_predicted.RRNG")
         save_rrng(rrng_out_path, all_predicted)
         print(f"Predicted RRNG saved to {rrng_out_path}")
 
@@ -538,7 +547,7 @@ def process_dataset(
         if xlim is None:
             print(f"Manual RRNG ranges: {len(truth)}")
         zoom_str = f"_zoom_{xlim[0]}_{xlim[1]}" if xlim else ""
-        comp_plot_path = os.path.join(output_dir, f"{output_dir}_yolo_1d_model_comparison{zoom_str}.png")
+        comp_plot_path = os.path.join(output_dir, f"{prefix}_yolo_1d_model_comparison{zoom_str}.png")
         plot_yolo_comparison(stats, xlim=xlim, save_path=comp_plot_path)
 
         # Also save additional comparison plots sliced into fifths (0-25, 25-50, ...)
@@ -548,10 +557,10 @@ def process_dataset(
             for lo, hi in zip(slice_edges, slice_edges[1:]):
                 if float(lo) >= float(plot_xmax):
                     continue
-                slice_path = os.path.join(output_dir, f"{output_dir}_yolo_1d_model_comparison_zoom_{lo}_{hi}.png")
+                slice_path = os.path.join(output_dir, f"{prefix}_yolo_1d_model_comparison_zoom_{lo}_{hi}.png")
                 plot_yolo_comparison(stats, xlim=(float(lo), float(hi)), save_path=slice_path)
 
-    print(f"Total processing time for {output_dir}: {time.perf_counter() - _t_file:.2f}s")
+    print(f"Total processing time for {prefix}: {time.perf_counter() - _t_file:.2f}s")
 
     return stats
 
@@ -617,9 +626,10 @@ def match_datasets(csv_dir, rrng_dir):
     return matches
 
 
-def run_batch(csv_dir, rrng_dir, *, save_plots=True, save_csv=True, **kwargs):
+def run_batch(csv_dir, rrng_dir, *, output_base='.', save_plots=True, save_csv=True, **kwargs):
     """
     Run process_dataset on all matched datasets in the given directories.
+    Per-dataset output folders are created under ``output_base``.
     Returns list of stats dicts.
     """
     items_to_process = match_datasets(csv_dir, rrng_dir)
@@ -631,7 +641,7 @@ def run_batch(csv_dir, rrng_dir, *, save_plots=True, save_csv=True, **kwargs):
         print(f"\n==================== DATASET: {base_prefix.upper()} ====================")
         try:
             stats = process_dataset(
-                apt_file, rrng_file, base_prefix,
+                apt_file, rrng_file, os.path.join(output_base, base_prefix),
                 save_plots=save_plots,
                 save_csv=save_csv,
                 **kwargs
@@ -1330,7 +1340,11 @@ def main():
     parser.add_argument("--rrng_path", type=str, default='ALL_RRNG_NEW',
                         help="Path to .rrng file or directory for batch mode")
     parser.add_argument("--output_dir", type=str, default=None,
-                        help="Output directory (single mode only; defaults to name from apt_file)")
+                        help="Output directory for this run. Single mode: the dataset folder "
+                             "(default: derived from the APT filename). Batch mode: parent folder "
+                             "holding per-dataset folders plus the global summary CSV, "
+                             "identifications, and plots (default: current directory). The "
+                             "run-config YAML is written here in both modes.")
 
     # Shared YOLO / RF / unknown-flagging / context-rescoring parameters
     # (single source of truth: peak_detection/run_config.py).
@@ -1346,9 +1360,6 @@ def main():
     args = parser.parse_args()
 
     cfg = config_from_namespace(args)
-    # Script-specific tunables to persist in the run config (I/O paths are intentionally
-    # excluded; the `command` header records those). These load back via --config too.
-    write_run_config(cfg, extra={k: getattr(args, k) for k in SCRIPT_CONFIG_KEYS})
 
     apt_path = args.apt_path
     rrng_path = args.rrng_path
@@ -1356,6 +1367,23 @@ def main():
     if not os.path.exists(apt_path) or not os.path.exists(rrng_path):
         print(f"Error: Path not found:\n  APT: {apt_path}\n  RRNG: {rrng_path}")
         sys.exit(1)
+
+    # Detect single-file vs batch mode
+    is_single = os.path.isfile(apt_path)
+
+    # Resolve this run's output directory. In single mode it is the dataset folder (explicit
+    # --output_dir, else derived from the APT filename); in batch mode it is the parent that
+    # holds the per-dataset folders plus the global summary CSV, identifications, and plots.
+    # The run-config YAML is written here as well.
+    if is_single:
+        out_base = args.output_dir or _default_output_dir(apt_path)
+    else:
+        out_base = args.output_dir or '.'
+
+    # Script-specific tunables to persist in the run config (I/O paths are intentionally
+    # excluded; the `command` header records those). These load back via --config too.
+    write_run_config(cfg, extra={k: getattr(args, k) for k in SCRIPT_CONFIG_KEYS},
+                     directory=out_base)
 
     # Shared params come from the RunConfig; output-control flags are script-specific.
     common_kwargs = {
@@ -1365,21 +1393,18 @@ def main():
         'save_csv': args.save_csv,
     }
 
-    # Detect single-file vs batch mode
-    is_single = os.path.isfile(apt_path)
-
     if is_single:
         # Single file mode
-        stats = process_dataset(apt_path, rrng_path, output_dir=args.output_dir, **common_kwargs)
-        print(f"\nDone. Results in {stats.dataset}/")
+        stats = process_dataset(apt_path, rrng_path, output_dir=out_base, **common_kwargs)
+        print(f"\nDone. Results in {out_base}/")
     else:
         # Batch mode
         print(f"Scanning for datasets in {apt_path}...")
-        all_stats = run_batch(apt_path, rrng_path, **common_kwargs)
+        all_stats = run_batch(apt_path, rrng_path, output_base=out_base, **common_kwargs)
 
         if all_stats:
-            # Save global summary statistics to CSV
-            summary_file = "peak_detection_summary.csv"
+            # Save global summary statistics to CSV (into the run output directory)
+            summary_file = os.path.join(out_base, "peak_detection_summary.csv")
             fieldnames = [
                 'dataset', 'config', 'true_peaks_count', 'predicted_peaks_count',
                 'found_peaks_count', 'precision', 'recall', 'f1',
@@ -1410,7 +1435,7 @@ def main():
 
             try:
                 from write_dataset_peak_summaries import write_dataset_peak_summaries
-                written_peak_summaries = write_dataset_peak_summaries(Path('.'))
+                written_peak_summaries = write_dataset_peak_summaries(Path(out_base))
                 print(f"Per-dataset peak summaries saved: {len(written_peak_summaries)} files")
             except Exception as e:
                 print(f"  [Warn] Failed writing per-dataset peak summaries ({e})")
@@ -1466,7 +1491,7 @@ def main():
                     })
 
             if yolo_export:
-                id_file = "yolo_identifications.csv"
+                id_file = os.path.join(out_base, "yolo_identifications.csv")
                 with open(id_file, 'w', newline='') as f:
                     writer = csv.DictWriter(f, fieldnames=['dataset', 'mass_center', 'mass_start', 'mass_end', 'identified_label'])
                     writer.writeheader()
@@ -1474,19 +1499,23 @@ def main():
                         writer.writerow(row)
                 print(f"Global YOLO Identifications saved to {id_file}")
 
-            # Generate summary plots
-            plot_rf_accuracy_summary(all_stats)
-            plot_rf_counts_summary(all_stats)
-            plot_rf_species_counts_with_unknowns_summary(all_stats)
-            plot_rf_element_counts_summary(all_stats)
-            plot_rf_molecule_counts_summary(all_stats)
-            plot_rf_element_counts_excluding_unknowns_summary(all_stats)
-            plot_rf_molecule_counts_excluding_unknowns_summary(all_stats)
-            plot_rf_element_accuracy_pct_summary(all_stats)
-            plot_rf_molecule_accuracy_pct_summary(all_stats)
-            plot_rf_element_accuracy_pct_including_unknowns_summary(all_stats)
-            plot_rf_molecule_accuracy_pct_including_unknowns_summary(all_stats)
-            plot_yolo_metrics_summary(all_stats)
+            # Generate summary plots (into the run output directory)
+            summary_plots = [
+                (plot_rf_accuracy_summary, "rf_accuracy_vs_dataset.png"),
+                (plot_rf_counts_summary, "rf_counts_vs_dataset.png"),
+                (plot_rf_species_counts_with_unknowns_summary, "rf_species_counts_with_unknowns_vs_dataset.png"),
+                (plot_rf_element_counts_summary, "rf_element_counts_vs_dataset.png"),
+                (plot_rf_molecule_counts_summary, "rf_molecule_counts_vs_dataset.png"),
+                (plot_rf_element_counts_excluding_unknowns_summary, "rf_element_counts_excluding_unknowns_vs_dataset.png"),
+                (plot_rf_molecule_counts_excluding_unknowns_summary, "rf_molecule_counts_excluding_unknowns_vs_dataset.png"),
+                (plot_rf_element_accuracy_pct_summary, "rf_element_accuracy_pct_vs_dataset.png"),
+                (plot_rf_molecule_accuracy_pct_summary, "rf_molecule_accuracy_pct_vs_dataset.png"),
+                (plot_rf_element_accuracy_pct_including_unknowns_summary, "rf_element_accuracy_pct_including_unknowns_vs_dataset.png"),
+                (plot_rf_molecule_accuracy_pct_including_unknowns_summary, "rf_molecule_accuracy_pct_including_unknowns_vs_dataset.png"),
+                (plot_yolo_metrics_summary, "yolo_metrics_vs_dataset.png"),
+            ]
+            for plot_fn, plot_name in summary_plots:
+                plot_fn(all_stats, output_path=os.path.join(out_base, plot_name))
 
             print(f"\nBatch Processing Complete. Summary saved to {summary_file}")
         else:

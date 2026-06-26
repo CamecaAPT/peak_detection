@@ -955,7 +955,9 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
 
                 if context_override_rows:
                     print(f"  Context RF rescoring overrides applied: {len(context_override_rows)}/{considered} candidates")
-                    context_overrides_path = os.path.join(prefix_internal, f"{prefix_internal}_context_rescore_overrides.csv")
+                    _ctx_dir = artifacts_dir or prefix_internal
+                    os.makedirs(_ctx_dir, exist_ok=True)
+                    context_overrides_path = os.path.join(_ctx_dir, f"{prefix_internal}_context_rescore_overrides.csv")
                     cols = [
                         'peak_start', 'peak_end', 'peak_mc',
                         'old_label', 'old_method', 'old_is_unknown',
@@ -1249,7 +1251,9 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
                 r2['molecule_pred'] = label_map.get(str(r2.get('molecule_pred_simple', '')), str(r2.get('molecule_pred_simple', '')))
                 mapped_rows.append(r2)
 
-            rescue_overrides_path = os.path.join(prefix_internal, f"{prefix_internal}_molecule_rescue_candidates.csv")
+            _rescue_dir = artifacts_dir or prefix_internal
+            os.makedirs(_rescue_dir, exist_ok=True)
+            rescue_overrides_path = os.path.join(_rescue_dir, f"{prefix_internal}_molecule_rescue_candidates.csv")
             cols = [
                 'peak_start', 'peak_end', 'peak_mc',
                 'element_pred', 'element_pred_simple', 'element_conf', 'element_dist',

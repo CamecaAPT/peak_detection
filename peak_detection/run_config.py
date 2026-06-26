@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import numbers
+import os
 import sys
 from dataclasses import dataclass, field, fields, make_dataclass
 from datetime import datetime
@@ -278,7 +279,7 @@ def load_config_yaml(path: str) -> dict:
 
 
 def write_run_config(cfg: "RunConfig", path: str | None = None,
-                     extra: dict | None = None) -> str:
+                     extra: dict | None = None, directory: str | None = None) -> str:
     """Write the effective config to YAML (plus command/timestamp header). Returns the path.
 
     ``extra`` is an optional ``{name: value}`` mapping of script-specific tunables to persist
@@ -286,9 +287,18 @@ def write_run_config(cfg: "RunConfig", path: str | None = None,
     ``apply_config_defaults`` exactly like any other known argument, so a script can round-trip
     its own settings; keys a different script doesn't recognise are simply ignored on load.
     Keep per-run I/O paths out of ``extra`` — the ``command`` header already records them.
+
+    ``directory`` places the auto-named ``run_config_<timestamp>.yaml`` in that folder (created
+    if needed). ``path`` (an explicit file path) takes precedence over ``directory``.
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = path or f"run_config_{timestamp}.yaml"
+    if path is None:
+        name = f"run_config_{timestamp}.yaml"
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+            path = os.path.join(directory, name)
+        else:
+            path = name
     data = config_to_dict(cfg)
     if extra:
         for k, v in extra.items():
