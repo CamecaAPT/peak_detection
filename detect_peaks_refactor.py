@@ -1349,15 +1349,6 @@ def main():
                              "holding per-dataset folders plus the global summary CSV, "
                              "identifications, and plots (default: current directory). The "
                              "run-config YAML is written here in both modes.")
-    parser.add_argument(
-        "--unknown_mixed_element_molecule_confidence_threshold",
-        type=float,
-        default=0.95,
-        help=(
-            "Flag high-confidence mixed element+molecule top-2 assignments as Unknown when both "
-            "confidences are at least this value; set <=0 to disable"
-        ),
-    )
 
     # Shared YOLO / RF / unknown-flagging / context-rescoring parameters
     # (single source of truth: peak_detection/run_config.py).
@@ -1401,7 +1392,6 @@ def main():
     # Shared params come from the RunConfig; output-control flags are script-specific.
     common_kwargs = {
         **cfg.to_kwargs(),
-        'unknown_mixed_element_molecule_confidence_threshold': args.unknown_mixed_element_molecule_confidence_threshold,
         'save_plots': args.save_plots,
         'save_rrng_output': args.save_rrng_output,
         'save_csv': args.save_csv,

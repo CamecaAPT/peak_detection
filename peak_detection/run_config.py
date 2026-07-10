@@ -112,6 +112,9 @@ SHARED_PARAMS: list[Param] = [
           "Flag RF IDs as Unknown when the top candidate confidence is below this cutoff; set <=0 to disable"),
     Param("rf_accuracy_top_n", int, 1,
           "Consider the top N stored RF candidates when scoring element/molecule classification accuracy"),
+    Param("unknown_mixed_element_molecule_confidence_threshold", float, 0.95,
+          "Flag high-confidence mixed element+molecule top-2 assignments as Unknown when both "
+          "confidences are at least this value; set <=0 to disable"),
 
     # --- Context rescoring ---
     Param("context_rescore", None, False,
