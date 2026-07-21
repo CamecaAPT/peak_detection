@@ -9,8 +9,12 @@
 //   6. load the generated .rrng back onto the selected node.
 //
 // Load it via the console's "Load…" button (or "Run script…"), then Run (or Ctrl+Enter).
-// When loaded from disk, Api.ScriptDirectory is this file's folder, so extRoot and the default
+// When loaded from disk, ScriptDirectory is this file's folder, so extRoot and the default
 // RunConfig resolve against it automatically.
+//
+// NOTE: updated for the Phase-2 contract reshape (Cameca.Scripting.Contracts) — the selected node and
+// expected elements are read via async methods, POCO settings go through Settings.ReviewAsync, and
+// ScriptDirectory / RunProcessAsync are globals-level members. See scripting-host-plan.md.
 
 using System.ComponentModel;
 using System.Globalization;
@@ -145,11 +149,11 @@ void ApplyRunConfig(RangingSettings s, Dictionary<string, string> c)
 }
 
 // ---- 1. Require a selected Mass Spectrum Analysis ----
-if (Api.SelectedMassSpectrum is not {} ms) { Print("Select a Mass Spectrum Analysis first."); return; }
+if (await Api.GetSelectedMassSpectrumAsync() is not {} ms) { Print("Select a Mass Spectrum Analysis first."); return; }
 
 // ---- Paths (cwd = project root so the tool's relative weights/training paths resolve) ----
 // When the script is loaded from disk, extRoot is its own folder; the fallback covers REPL runs.
-var extRoot    = Api.ScriptDirectory ?? @"C:\workspace\extensions\peak_detection";
+var extRoot    = ScriptDirectory ?? @"C:\workspace\extensions\peak_detection";
 var venvPython = Path.Combine(extRoot, @".venv\Scripts\python.exe");
 var pyScript   = Path.Combine(extRoot, "detect_peaks_headless.py");
 
@@ -161,12 +165,12 @@ var aptPath    = Path.Combine(outputDir, "spectrum.apt");
 var rngPath    = Path.Combine(outputDir, "result.rrng");
 
 // ---- 2. Expected ions come from the TOP-LEVEL range file, supplied as a list ----
-string[] elements = ms.GetRootExpectedElements();
+string[] elements = await ms.GetRootExpectedElementsAsync();
 if (elements.Length == 0) { Print("The top-level range file has no ion definitions to seed from."); return; }
 Print($"Expected ions ({elements.Length}): {string.Join(",", elements)}");
 
 // ---- 3. Choose the RunConfig YAML, then preload its parameters ----
-var cc = await Api.ReviewSettingsAsync(new ConfigChoice(), "Choose RunConfig YAML");
+var cc = await Settings.ReviewAsync(new ConfigChoice(), "Choose RunConfig YAML");
 var configPath = (cc.RunConfigPath ?? "").Trim();
 if (configPath.Length > 0 && !Path.IsPathRooted(configPath))
 	configPath = Path.Combine(extRoot, configPath);
@@ -196,7 +200,7 @@ else
 }
 
 // ---- 4. Review/adjust the (possibly preloaded) settings ----
-var s = await Api.ReviewSettingsAsync(settings,
+var s = await Settings.ReviewAsync(settings,
 	configExists ? "Review parameters (loaded from RunConfig)" : "Review parameters (script defaults)");
 
 // ---- 5. Export APT for the model to re-histogram ----
@@ -244,7 +248,7 @@ if (s.ProgressUpdateFraction > 0)   // 0 => omit, tool keeps its continuous defa
 }
 
 Print("Running peak detection… (model load + inference can take a while)");
-var result = await Api.RunProcessAsync(venvPython, args, extRoot,
+var result = await RunProcessAsync(venvPython, args, extRoot,
 	onOutput: line => Print(line),
 	onError:  line => Print($"[err] {line}"));   // stderr streamed live too
 if (!result.Ok) { Print($"Peak detection failed (exit {result.ExitCode})."); return; }
