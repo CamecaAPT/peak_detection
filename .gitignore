@@ -1,5 +1,4 @@
 # Byte-compiled / optimized / DLL files
-__pycache__/
 *.py[cod]
 *$py.class
 
@@ -172,7 +171,17 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
-**/__pycache__/*
-/.vscode/**
+
+# Byte-compiled caches (any nested location)
+**/__pycache__/
+
+# Jupyter checkpoints (any nested location)
+**/.ipynb_checkpoints/
+
+# Editors
+.vscode/
 /.idea/apt.iml
 /.idea/**
+
+# macOS
+**/.DS_Store
