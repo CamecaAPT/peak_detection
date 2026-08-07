@@ -37,6 +37,13 @@ from peak_detection.run_config import (
     write_run_config,
 )
 
+# Optional: per-dataset peak-summary writer. Guarded so a problem in that module doesn't
+# prevent this script from running its core detection/evaluation.
+try:
+    from write_dataset_peak_summaries import write_dataset_peak_summaries
+except Exception:
+    write_dataset_peak_summaries = None
+
 # Script-specific output-control tunables (beyond the shared RunConfig) that are persisted
 # to / loadable from the run-config YAML. Per-run I/O paths are deliberately omitted.
 SCRIPT_CONFIG_KEYS = ['save_plots', 'save_csv', 'save_rrng_output']
@@ -166,6 +173,61 @@ def plot_yolo_comparison(stats, xlim=None, save_path=None, facecolor=None):
         plt.show()
 
 
+def _extract_rf_counts(counts: dict) -> dict:
+    """Pull species/elemental/molecular total+correct counts out of an
+    rf_accuracy_breakdown['counts']-shaped dict, for both the including- and
+    excluding-unknowns scopes. Molecular counts are derived from species - elemental
+    when not reported directly. Keys returned (no 'rf_' prefix, '_exc' suffix for the
+    excluding-unknowns scope): species_total, species_correct, elemental_total,
+    elemental_correct, molecular_total, molecular_correct (and their '_exc' variants).
+    """
+    def g(key):
+        return int(counts.get(key, 0) or 0)
+
+    result = {}
+    for suffix, scope in (('', 'including_unknowns'), ('_exc', 'excluding_unknowns')):
+        species_total = g(f'species_total_{scope}')
+        species_correct = g(f'species_correct_{scope}')
+        elemental_total = g(f'elemental_total_{scope}')
+        elemental_correct = g(f'elemental_correct_{scope}')
+        if f'molecular_total_{scope}' in counts:
+            molecular_total = g(f'molecular_total_{scope}')
+            molecular_correct = g(f'molecular_correct_{scope}')
+        else:
+            molecular_total = max(0, species_total - elemental_total)
+            molecular_correct = max(0, species_correct - elemental_correct)
+
+        result[f'species_total{suffix}'] = species_total
+        result[f'species_correct{suffix}'] = species_correct
+        result[f'elemental_total{suffix}'] = elemental_total
+        result[f'elemental_correct{suffix}'] = elemental_correct
+        result[f'molecular_total{suffix}'] = molecular_total
+        result[f'molecular_correct{suffix}'] = molecular_correct
+    return result
+
+
+def _print_rf_accuracy_line(label, key, breakdown, counts):
+    """Print one 'RF Accuracy (<label>): X% (c/t) including unknowns, Y% (c/t) excluding unknowns' line."""
+    print(
+        f"  RF Accuracy ({label}): "
+        f"{breakdown.get(f'{key}_including_unknowns', 0.0):.1f}% "
+        f"({counts.get(f'{key}_correct_including_unknowns', 0)}/{counts.get(f'{key}_total_including_unknowns', 0)}) including unknowns, "
+        f"{breakdown.get(f'{key}_excluding_unknowns', 0.0):.1f}% "
+        f"({counts.get(f'{key}_correct_excluding_unknowns', 0)}/{counts.get(f'{key}_total_excluding_unknowns', 0)}) excluding unknowns"
+    )
+
+
+def _print_rescue_impact_line(label, key, before, after, before_counts, after_counts, suffix=''):
+    """Print one 'Molecule rescue impact (excluding unknowns): <label> X% (c/t) -> Y% (c/t)' line."""
+    print(
+        f"  Molecule rescue impact (excluding unknowns): "
+        f"{label} {before.get(f'{key}_excluding_unknowns', 0.0):.1f}% "
+        f"({before_counts.get(f'{key}_correct_excluding_unknowns', 0)}/{before_counts.get(f'{key}_total_excluding_unknowns', 0)}) -> "
+        f"{after.get(f'{key}_excluding_unknowns', 0.0):.1f}% "
+        f"({after_counts.get(f'{key}_correct_excluding_unknowns', 0)}/{after_counts.get(f'{key}_total_excluding_unknowns', 0)}){suffix}"
+    )
+
+
 def process_dataset(
     apt_file: str,
     rrng_file: str,
@@ -183,7 +245,9 @@ def process_dataset(
     mc_min: float = 0.0,
     mc_max: float = 307.2,
     # RF parameters
-    training_path: str = None,
+    # NOTE: keyword defaults below mirror peak_detection.run_config.SHARED_PARAMS (the single
+    # source of truth used by the CLI in main()); keep them in sync if either one changes.
+    training_path: str = 'peak_detection/Ionclassifier/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001',
     training_num_files: int = 10000,
     augment_molecule_training_charge_ratios: bool = False,
     molecule_rf_rescue_elements: bool = False,
@@ -303,28 +367,10 @@ def process_dataset(
     # --- RF ACCURACY OUTPUT ---
     if rf_accuracy_breakdown and 'counts' in rf_accuracy_breakdown:
         c = rf_accuracy_breakdown['counts']
-        print(
-            "  RF Accuracy (All species): "
-            f"{rf_accuracy_breakdown['species_including_unknowns']:.1f}% "
-            f"({c.get('species_correct_including_unknowns', 0)}/{c.get('species_total_including_unknowns', 0)}) including unknowns, "
-            f"{rf_accuracy_breakdown['species_excluding_unknowns']:.1f}% "
-            f"({c.get('species_correct_excluding_unknowns', 0)}/{c.get('species_total_excluding_unknowns', 0)}) excluding unknowns"
-        )
-        print(
-            "  RF Accuracy (Elemental only): "
-            f"{rf_accuracy_breakdown['elemental_including_unknowns']:.1f}% "
-            f"({c.get('elemental_correct_including_unknowns', 0)}/{c.get('elemental_total_including_unknowns', 0)}) including unknowns, "
-            f"{rf_accuracy_breakdown['elemental_excluding_unknowns']:.1f}% "
-            f"({c.get('elemental_correct_excluding_unknowns', 0)}/{c.get('elemental_total_excluding_unknowns', 0)}) excluding unknowns"
-        )
+        _print_rf_accuracy_line('All species', 'species', rf_accuracy_breakdown, c)
+        _print_rf_accuracy_line('Elemental only', 'elemental', rf_accuracy_breakdown, c)
         if 'molecular_excluding_unknowns' in rf_accuracy_breakdown:
-            print(
-                "  RF Accuracy (Molecular only): "
-                f"{rf_accuracy_breakdown.get('molecular_including_unknowns', 0.0):.1f}% "
-                f"({c.get('molecular_correct_including_unknowns', 0)}/{c.get('molecular_total_including_unknowns', 0)}) including unknowns, "
-                f"{rf_accuracy_breakdown.get('molecular_excluding_unknowns', 0.0):.1f}% "
-                f"({c.get('molecular_correct_excluding_unknowns', 0)}/{c.get('molecular_total_excluding_unknowns', 0)}) excluding unknowns"
-            )
+            _print_rf_accuracy_line('Molecular only', 'molecular', rf_accuracy_breakdown, c)
 
         if 'before_rescue' in rf_accuracy_breakdown and 'after_rescue' in rf_accuracy_breakdown:
             b = rf_accuracy_breakdown['before_rescue']
@@ -332,98 +378,40 @@ def process_dataset(
             bc = b.get('counts', {}) or {}
             ac = a.get('counts', {}) or {}
             rs = rf_accuracy_breakdown.get('rescue', {}) or {}
-            print(
-                "  Molecule rescue impact (excluding unknowns): "
-                f"species {b.get('species_excluding_unknowns', 0.0):.1f}% "
-                f"({bc.get('species_correct_excluding_unknowns', 0)}/{bc.get('species_total_excluding_unknowns', 0)}) -> "
-                f"{a.get('species_excluding_unknowns', 0.0):.1f}% "
-                f"({ac.get('species_correct_excluding_unknowns', 0)}/{ac.get('species_total_excluding_unknowns', 0)}); "
-                f"overrides {rs.get('overrides', 0)}/{rs.get('considered', 0)}"
-            )
-            print(
-                "  Molecule rescue impact (excluding unknowns): "
-                f"elements {b.get('elemental_excluding_unknowns', 0.0):.1f}% "
-                f"({bc.get('elemental_correct_excluding_unknowns', 0)}/{bc.get('elemental_total_excluding_unknowns', 0)}) -> "
-                f"{a.get('elemental_excluding_unknowns', 0.0):.1f}% "
-                f"({ac.get('elemental_correct_excluding_unknowns', 0)}/{ac.get('elemental_total_excluding_unknowns', 0)})"
-            )
-            print(
-                "  Molecule rescue impact (excluding unknowns): "
-                f"molecules {b.get('molecular_excluding_unknowns', 0.0):.1f}% "
-                f"({bc.get('molecular_correct_excluding_unknowns', 0)}/{bc.get('molecular_total_excluding_unknowns', 0)}) -> "
-                f"{a.get('molecular_excluding_unknowns', 0.0):.1f}% "
-                f"({ac.get('molecular_correct_excluding_unknowns', 0)}/{ac.get('molecular_total_excluding_unknowns', 0)})"
-            )
+            _print_rescue_impact_line('species', 'species', b, a, bc, ac,
+                                       suffix=f"; overrides {rs.get('overrides', 0)}/{rs.get('considered', 0)}")
+            _print_rescue_impact_line('elements', 'elemental', b, a, bc, ac)
+            _print_rescue_impact_line('molecules', 'molecular', b, a, bc, ac)
     else:
         print(f"  RF Accuracy (All species): {rf_accuracy:.1f}%")
         print(f"  RF Accuracy (Elemental only): {rf_accuracy_ele:.1f}%")
 
-    rf_species_total = 0
-    rf_species_correct = 0
-    rf_elemental_total = 0
-    rf_elemental_correct = 0
-    rf_molecular_total = 0
-    rf_molecular_correct = 0
-    rf_species_total_exc = 0
-    rf_species_correct_exc = 0
-    rf_elemental_total_exc = 0
-    rf_elemental_correct_exc = 0
-    rf_molecular_total_exc = 0
-    rf_molecular_correct_exc = 0
-    rf_species_total_before = 0
-    rf_species_correct_before = 0
-    rf_elemental_total_before = 0
-    rf_elemental_correct_before = 0
-    rf_molecular_total_before = 0
-    rf_molecular_correct_before = 0
-    rf_species_total_before_exc = 0
-    rf_species_correct_before_exc = 0
-    rf_elemental_total_before_exc = 0
-    rf_elemental_correct_before_exc = 0
-    rf_molecular_total_before_exc = 0
-    rf_molecular_correct_before_exc = 0
+    rf_counts = {
+        'rf_species_total': 0, 'rf_species_correct': 0,
+        'rf_elemental_total': 0, 'rf_elemental_correct': 0,
+        'rf_molecular_total': 0, 'rf_molecular_correct': 0,
+        'rf_species_total_exc': 0, 'rf_species_correct_exc': 0,
+        'rf_elemental_total_exc': 0, 'rf_elemental_correct_exc': 0,
+        'rf_molecular_total_exc': 0, 'rf_molecular_correct_exc': 0,
+        'rf_species_total_before': 0, 'rf_species_correct_before': 0,
+        'rf_elemental_total_before': 0, 'rf_elemental_correct_before': 0,
+        'rf_molecular_total_before': 0, 'rf_molecular_correct_before': 0,
+        'rf_species_total_before_exc': 0, 'rf_species_correct_before_exc': 0,
+        'rf_elemental_total_before_exc': 0, 'rf_elemental_correct_before_exc': 0,
+        'rf_molecular_total_before_exc': 0, 'rf_molecular_correct_before_exc': 0,
+    }
     molecule_rescue_considered = 0
     molecule_rescue_overrides = 0
     molecule_rescue_mixed_candidates = 0
     if rf_accuracy_breakdown and 'counts' in rf_accuracy_breakdown:
         c = rf_accuracy_breakdown.get('counts', {}) or {}
-        rf_species_total = int(c.get('species_total_including_unknowns', 0) or 0)
-        rf_species_correct = int(c.get('species_correct_including_unknowns', 0) or 0)
-        rf_elemental_total = int(c.get('elemental_total_including_unknowns', 0) or 0)
-        rf_elemental_correct = int(c.get('elemental_correct_including_unknowns', 0) or 0)
-        if 'molecular_total_including_unknowns' in c:
-            rf_molecular_total = int(c.get('molecular_total_including_unknowns', 0) or 0)
-            rf_molecular_correct = int(c.get('molecular_correct_including_unknowns', 0) or 0)
-        else:
-            rf_molecular_total = max(0, rf_species_total - rf_elemental_total)
-            rf_molecular_correct = max(0, rf_species_correct - rf_elemental_correct)
-
-        rf_species_total_exc = int(c.get('species_total_excluding_unknowns', 0) or 0)
-        rf_species_correct_exc = int(c.get('species_correct_excluding_unknowns', 0) or 0)
-        rf_elemental_total_exc = int(c.get('elemental_total_excluding_unknowns', 0) or 0)
-        rf_elemental_correct_exc = int(c.get('elemental_correct_excluding_unknowns', 0) or 0)
-        if 'molecular_total_excluding_unknowns' in c:
-            rf_molecular_total_exc = int(c.get('molecular_total_excluding_unknowns', 0) or 0)
-            rf_molecular_correct_exc = int(c.get('molecular_correct_excluding_unknowns', 0) or 0)
-        else:
-            rf_molecular_total_exc = max(0, rf_species_total_exc - rf_elemental_total_exc)
-            rf_molecular_correct_exc = max(0, rf_species_correct_exc - rf_elemental_correct_exc)
+        rf_counts.update({f'rf_{k}': v for k, v in _extract_rf_counts(c).items()})
 
         if 'before_rescue' in rf_accuracy_breakdown and 'after_rescue' in rf_accuracy_breakdown:
             bc = (rf_accuracy_breakdown.get('before_rescue', {}) or {}).get('counts', {}) or {}
-            rf_species_total_before = int(bc.get('species_total_including_unknowns', 0) or 0)
-            rf_species_correct_before = int(bc.get('species_correct_including_unknowns', 0) or 0)
-            rf_elemental_total_before = int(bc.get('elemental_total_including_unknowns', 0) or 0)
-            rf_elemental_correct_before = int(bc.get('elemental_correct_including_unknowns', 0) or 0)
-            rf_molecular_total_before = int(bc.get('molecular_total_including_unknowns', 0) or 0)
-            rf_molecular_correct_before = int(bc.get('molecular_correct_including_unknowns', 0) or 0)
-
-            rf_species_total_before_exc = int(bc.get('species_total_excluding_unknowns', 0) or 0)
-            rf_species_correct_before_exc = int(bc.get('species_correct_excluding_unknowns', 0) or 0)
-            rf_elemental_total_before_exc = int(bc.get('elemental_total_excluding_unknowns', 0) or 0)
-            rf_elemental_correct_before_exc = int(bc.get('elemental_correct_excluding_unknowns', 0) or 0)
-            rf_molecular_total_before_exc = int(bc.get('molecular_total_excluding_unknowns', 0) or 0)
-            rf_molecular_correct_before_exc = int(bc.get('molecular_correct_excluding_unknowns', 0) or 0)
+            for k, v in _extract_rf_counts(bc).items():
+                key = f'rf_{k[:-4]}_before_exc' if k.endswith('_exc') else f'rf_{k}_before'
+                rf_counts[key] = v
 
             rs = rf_accuracy_breakdown.get('rescue', {}) or {}
             molecule_rescue_considered = int(rs.get('considered', 0) or 0)
@@ -436,37 +424,31 @@ def process_dataset(
     pc, rc, f1c = calculate_metrics(truth, all_predicted)
     print(f"  Total Combined Metrics: Precision={pc:.3f}, Recall={rc:.3f}, F1={f1c:.3f}")
 
-    # Calculate final found peaks (TP)
-    tp_count = 0
-    if len(truth) > 0 and len(all_predicted) > 0:
-        matched_truth = set()
-        for p in all_predicted:
-            for i, t in enumerate(truth):
-                if calculate_iou(p, t) > 0.1:
-                    matched_truth.add(i)
-        tp_count = len(matched_truth)
-
-    # Split unknowns by whether the predicted range matches any truth range.
+    # Calculate final found peaks (TP) and split unknowns by whether the predicted range
+    # matches any truth range. Single pass: each (predicted, truth) IoU is computed once.
+    matched_truth = set()
     pred_with_truth = 0
     pred_no_truth = 0
     unknown_with_truth = 0
     unknown_no_truth = 0
-    if len(all_predicted) > 0:
-        for p in all_predicted:
-            best_iou = 0.0
-            for t in truth:
-                iou_val = calculate_iou(p, t)
-                if iou_val > best_iou:
-                    best_iou = iou_val
-            has_truth = best_iou > 0.1
-            if has_truth:
-                pred_with_truth += 1
-                if getattr(p, 'is_unknown', False):
-                    unknown_with_truth += 1
-            else:
-                pred_no_truth += 1
-                if getattr(p, 'is_unknown', False):
-                    unknown_no_truth += 1
+    for p in all_predicted:
+        best_iou = 0.0
+        for i, t in enumerate(truth):
+            iou_val = calculate_iou(p, t)
+            if iou_val > 0.1:
+                matched_truth.add(i)
+            if iou_val > best_iou:
+                best_iou = iou_val
+        has_truth = best_iou > 0.1
+        if has_truth:
+            pred_with_truth += 1
+            if getattr(p, 'is_unknown', False):
+                unknown_with_truth += 1
+        else:
+            pred_no_truth += 1
+            if getattr(p, 'is_unknown', False):
+                unknown_no_truth += 1
+    tp_count = len(matched_truth)
 
     # Calculate min/max mass ranges
     true_min = min([t.start for t in truth]) if truth else 0
@@ -492,30 +474,7 @@ def process_dataset(
         pred_max_mc=pred_max,
         rf_accuracy=round(rf_accuracy, 2),
         rf_accuracy_ele=round(rf_accuracy_ele, 2),
-        rf_species_total=rf_species_total,
-        rf_species_correct=rf_species_correct,
-        rf_elemental_total=rf_elemental_total,
-        rf_elemental_correct=rf_elemental_correct,
-        rf_molecular_total=rf_molecular_total,
-        rf_molecular_correct=rf_molecular_correct,
-        rf_species_total_exc=rf_species_total_exc,
-        rf_species_correct_exc=rf_species_correct_exc,
-        rf_elemental_total_exc=rf_elemental_total_exc,
-        rf_elemental_correct_exc=rf_elemental_correct_exc,
-        rf_molecular_total_exc=rf_molecular_total_exc,
-        rf_molecular_correct_exc=rf_molecular_correct_exc,
-        rf_species_total_before=rf_species_total_before,
-        rf_species_correct_before=rf_species_correct_before,
-        rf_elemental_total_before=rf_elemental_total_before,
-        rf_elemental_correct_before=rf_elemental_correct_before,
-        rf_molecular_total_before=rf_molecular_total_before,
-        rf_molecular_correct_before=rf_molecular_correct_before,
-        rf_species_total_before_exc=rf_species_total_before_exc,
-        rf_species_correct_before_exc=rf_species_correct_before_exc,
-        rf_elemental_total_before_exc=rf_elemental_total_before_exc,
-        rf_elemental_correct_before_exc=rf_elemental_correct_before_exc,
-        rf_molecular_total_before_exc=rf_molecular_total_before_exc,
-        rf_molecular_correct_before_exc=rf_molecular_correct_before_exc,
+        **rf_counts,
         molecule_rescue_considered=molecule_rescue_considered,
         molecule_rescue_overrides=molecule_rescue_overrides,
         molecule_rescue_mixed_candidates=molecule_rescue_mixed_candidates,
@@ -657,97 +616,132 @@ def run_batch(csv_dir, rrng_dir, *, output_base='.', save_plots=True, save_csv=T
     return all_stats
 
 
-def plot_rf_accuracy_summary(all_stats, output_path="rf_accuracy_vs_dataset.png"):
-    """Generates a summary plot for RF accuracy across datasets."""
-    if not all_stats:
+def _plot_summary_series(
+    stats,
+    output_path,
+    title,
+    primary_series,
+    primary_ylabel,
+    *,
+    primary_ylim=None,
+    primary_ylabel_color=None,
+    secondary_series=None,
+    secondary_ylabel=None,
+    secondary_ylim=None,
+    secondary_ylabel_color=None,
+    annotate=None,
+    grid_alpha=0.2,
+    grid_linestyle='-',
+    log_label='plot',
+):
+    """
+    Shared per-dataset line-plot renderer used by the plot_rf_*/plot_yolo_metrics_summary
+    functions below. ``stats`` must already be sorted by dataset name.
+
+    ``primary_series``/``secondary_series`` are lists of dicts with keys ``values``, ``color``,
+    ``label``, and optionally ``linestyle`` (default '-') and ``marker`` (default 'o'). Passing
+    ``secondary_series`` adds a twin (right-hand) y-axis. ``annotate`` is an optional dict with
+    ``correct``, ``total``, and ``color`` keys to draw correct/total percentage labels (via
+    ``_annotate_count_percentages``) near each point on the primary axis.
+    """
+    if not stats:
         return
-    all_stats = sorted(all_stats, key=lambda x: x.dataset)
-    datasets = [s.dataset for s in all_stats]
-    display_names = [d[:20] + '...' if len(d) > 20 else d for d in datasets]
-    overall_acc = [s.rf_accuracy for s in all_stats]
-    elemental_acc = [s.rf_accuracy_ele for s in all_stats]
-
-    unk_frac_truth = []
-    unk_frac_no_truth = []
-    for s in all_stats:
-        pred_count = s.predicted_peaks_count or 1
-        unk_frac_truth.append((getattr(s, 'unknown_count_with_truth', 0) or 0) / pred_count)
-        unk_frac_no_truth.append((getattr(s, 'unknown_count_no_truth', 0) or 0) / pred_count)
-
-    avg_overall = np.mean(overall_acc)
-    avg_elemental = np.mean(elemental_acc)
-    avg_unk_truth = np.mean(unk_frac_truth)
-    avg_unk_no_truth = np.mean(unk_frac_no_truth)
+    display_names = [d[:20] + '...' if len(d) > 20 else d for d in (s.dataset for s in stats)]
 
     fig, ax1 = plt.subplots(figsize=(14, 7))
+    for series in primary_series:
+        ax1.plot(display_names, series['values'], marker=series.get('marker', 'o'),
+                  color=series['color'], label=series['label'], linewidth=1.5,
+                  linestyle=series.get('linestyle', '-'))
 
-    ax1.plot(display_names, overall_acc, marker='o', color='black', label=f'RF Accuracy Overall (Avg: {avg_overall:.1f}%)', linewidth=1.5)
-    ax1.plot(display_names, elemental_acc, marker='o', color='blue', label=f'RF Accuracy Elemental (Avg: {avg_elemental:.1f}%)', linewidth=1.5)
+    if annotate is not None:
+        _annotate_count_percentages(ax1, display_names, annotate['correct'], annotate['total'], annotate['color'])
 
     ax1.set_xlabel('Dataset')
-    ax1.set_ylabel('RF Accuracy (%)', color='black')
-    ax1.tick_params(axis='y', labelcolor='black')
-    ax1.set_ylim(-5, 105)
+    ax1.set_ylabel(primary_ylabel, color=primary_ylabel_color or 'black')
+    if primary_ylabel_color:
+        ax1.tick_params(axis='y', labelcolor=primary_ylabel_color)
     plt.xticks(rotation=90, ha='center', fontsize=8)
-
-    ax2 = ax1.twinx()
-    ax2.plot(
-        display_names, unk_frac_truth, marker='o', color='grey',
-        label=f'Unknown fraction (truth-matched / all predicted, Avg: {avg_unk_truth:.3f})',
-        linewidth=1.5
-    )
-    ax2.plot(
-        display_names, unk_frac_no_truth, marker='o', color='lightgrey',
-        label=f'Unknown fraction (extra/no-truth / all predicted, Avg: {avg_unk_no_truth:.3f})',
-        linewidth=1.5, linestyle='--'
-    )
-    ax2.set_ylabel('Fraction of Unknowns', color='grey')
-    ax2.tick_params(axis='y', labelcolor='grey')
-    ax2.set_ylim(-0.05, 1.05)
-
-    plt.title('RF Identification Accuracy and Unknown Peak Fraction (Truth-Matched vs Unmatched)')
+    if primary_ylim is not None:
+        ax1.set_ylim(*primary_ylim)
+    ax1.grid(True, linestyle=grid_linestyle, alpha=grid_alpha)
+    plt.title(title)
 
     lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
+    lines2, labels2 = [], []
+    if secondary_series:
+        ax2 = ax1.twinx()
+        for series in secondary_series:
+            ax2.plot(display_names, series['values'], marker=series.get('marker', 'o'),
+                      color=series['color'], label=series['label'], linewidth=1.5,
+                      linestyle=series.get('linestyle', '-'))
+        if secondary_ylabel:
+            ax2.set_ylabel(secondary_ylabel, color=secondary_ylabel_color or 'black')
+        if secondary_ylabel_color:
+            ax2.tick_params(axis='y', labelcolor=secondary_ylabel_color)
+        if secondary_ylim is not None:
+            ax2.set_ylim(*secondary_ylim)
+        lines2, labels2 = ax2.get_legend_handles_labels()
+
     ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
 
     fig.tight_layout()
     plt.savefig(output_path, dpi=300)
-    print(f"Saved RF accuracy summary plot to {output_path}")
-    plt.close()
+    print(f"Saved {log_label} to {output_path}")
+    plt.close('all')
+
+
+def plot_rf_accuracy_summary(all_stats, output_path="rf_accuracy_vs_dataset.png"):
+    """Generates a summary plot for RF accuracy across datasets."""
+    if not all_stats:
+        return
+    stats = sorted(all_stats, key=lambda x: x.dataset)
+    overall_acc = [s.rf_accuracy for s in stats]
+    elemental_acc = [s.rf_accuracy_ele for s in stats]
+    unk_frac_truth = [(getattr(s, 'unknown_count_with_truth', 0) or 0) / (s.predicted_peaks_count or 1) for s in stats]
+    unk_frac_no_truth = [(getattr(s, 'unknown_count_no_truth', 0) or 0) / (s.predicted_peaks_count or 1) for s in stats]
+
+    _plot_summary_series(
+        stats, output_path,
+        title='RF Identification Accuracy and Unknown Peak Fraction (Truth-Matched vs Unmatched)',
+        primary_series=[
+            dict(values=overall_acc, color='black', label=f'RF Accuracy Overall (Avg: {np.mean(overall_acc):.1f}%)'),
+            dict(values=elemental_acc, color='blue', label=f'RF Accuracy Elemental (Avg: {np.mean(elemental_acc):.1f}%)'),
+        ],
+        primary_ylabel='RF Accuracy (%)', primary_ylabel_color='black', primary_ylim=(-5, 105),
+        secondary_series=[
+            dict(values=unk_frac_truth, color='grey',
+                 label=f'Unknown fraction (truth-matched / all predicted, Avg: {np.mean(unk_frac_truth):.3f})'),
+            dict(values=unk_frac_no_truth, color='lightgrey', linestyle='--',
+                 label=f'Unknown fraction (extra/no-truth / all predicted, Avg: {np.mean(unk_frac_no_truth):.3f})'),
+        ],
+        secondary_ylabel='Fraction of Unknowns', secondary_ylabel_color='grey', secondary_ylim=(-0.05, 1.05),
+        log_label='RF accuracy summary plot',
+    )
 
 
 def plot_rf_counts_summary(all_stats, output_path="rf_counts_vs_dataset.png"):
     """Plot RF classification totals/correct counts across datasets (elemental-only and overall species)."""
     if not all_stats:
         return
-    all_stats = sorted(all_stats, key=lambda x: x.dataset)
-    datasets = [s.dataset for s in all_stats]
-    display_names = [d[:20] + '...' if len(d) > 20 else d for d in datasets]
+    stats = sorted(all_stats, key=lambda x: x.dataset)
+    true_ele = [int(getattr(s, 'rf_elemental_total', 0) or 0) for s in stats]
+    corr_ele = [int(getattr(s, 'rf_elemental_correct', 0) or 0) for s in stats]
+    true_all = [int(getattr(s, 'rf_species_total', 0) or 0) for s in stats]
+    corr_all = [int(getattr(s, 'rf_species_correct', 0) or 0) for s in stats]
 
-    true_ele = [int(getattr(s, 'rf_elemental_total', 0) or 0) for s in all_stats]
-    corr_ele = [int(getattr(s, 'rf_elemental_correct', 0) or 0) for s in all_stats]
-    true_all = [int(getattr(s, 'rf_species_total', 0) or 0) for s in all_stats]
-    corr_all = [int(getattr(s, 'rf_species_correct', 0) or 0) for s in all_stats]
-
-    fig, ax = plt.subplots(figsize=(14, 7))
-    ax.plot(display_names, true_ele, marker='o', color='blue', label='True elemental (count)', linewidth=1.5)
-    ax.plot(display_names, corr_ele, marker='o', color='navy', label='Correct elemental (count)', linewidth=1.5)
-    ax.plot(display_names, true_all, marker='o', color='black', label='True overall (count)', linewidth=1.5)
-    ax.plot(display_names, corr_all, marker='o', color='green', label='Correct overall (count)', linewidth=1.5)
-
-    ax.set_xlabel('Dataset')
-    ax.set_ylabel('Count')
-    plt.xticks(rotation=90, ha='center', fontsize=8)
-    ax.set_ylim(bottom=-1)
-    ax.grid(True, alpha=0.2)
-    plt.title('RF Classification Counts (True vs Correct)')
-    ax.legend(loc='upper left')
-
-    fig.tight_layout()
-    plt.savefig(output_path, dpi=300)
-    print(f"Saved RF counts summary plot to {output_path}")
-    plt.close()
+    _plot_summary_series(
+        stats, output_path,
+        title='RF Classification Counts (True vs Correct)',
+        primary_series=[
+            dict(values=true_ele, color='blue', label='True elemental (count)'),
+            dict(values=corr_ele, color='navy', label='Correct elemental (count)'),
+            dict(values=true_all, color='black', label='True overall (count)'),
+            dict(values=corr_all, color='green', label='Correct overall (count)'),
+        ],
+        primary_ylabel='Count', primary_ylim=(-1, None),
+        log_label='RF counts summary plot',
+    )
 
 
 def plot_rf_species_counts_with_unknowns_summary(all_stats, output_path="rf_species_counts_with_unknowns_vs_dataset.png"):
@@ -760,33 +754,24 @@ def plot_rf_species_counts_with_unknowns_summary(all_stats, output_path="rf_spec
     """
     if not all_stats:
         return
-    all_stats = sorted(all_stats, key=lambda x: x.dataset)
-    datasets = [s.dataset for s in all_stats]
-    display_names = [d[:20] + '...' if len(d) > 20 else d for d in datasets]
+    stats = sorted(all_stats, key=lambda x: x.dataset)
+    total_all = [int(getattr(s, 'rf_species_total', 0) or 0) for s in stats]
+    correct_all = [int(getattr(s, 'rf_species_correct', 0) or 0) for s in stats]
+    unknown_with_truth = [int(getattr(s, 'unknown_count_with_truth', 0) or 0) for s in stats]
+    unknown_no_truth = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in stats]
 
-    total_all = [int(getattr(s, 'rf_species_total', 0) or 0) for s in all_stats]
-    correct_all = [int(getattr(s, 'rf_species_correct', 0) or 0) for s in all_stats]
-    unknown_with_truth = [int(getattr(s, 'unknown_count_with_truth', 0) or 0) for s in all_stats]
-    unknown_no_truth = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in all_stats]
-
-    fig, ax = plt.subplots(figsize=(14, 7))
-    ax.plot(display_names, total_all, marker='o', color='black', label='Total species (truth-matched count)', linewidth=1.5)
-    ax.plot(display_names, correct_all, marker='o', color='green', label='Correct species (count)', linewidth=1.5)
-    ax.plot(display_names, unknown_with_truth, marker='o', color='grey', label='Unknown species (truth-matched count)', linewidth=1.5, linestyle='--')
-    ax.plot(display_names, unknown_no_truth, marker='o', color='lightgrey', label='Unknown extra predictions (no truth match count)', linewidth=1.5, linestyle=':')
-
-    ax.set_xlabel('Dataset')
-    ax.set_ylabel('Count')
-    plt.xticks(rotation=90, ha='center', fontsize=8)
-    ax.set_ylim(bottom=-1)
-    ax.grid(True, alpha=0.2)
-    plt.title('RF Overall Species Counts (Total vs Correct vs Unknown, Split by Truth Match)')
-    ax.legend(loc='upper left')
-
-    fig.tight_layout()
-    plt.savefig(output_path, dpi=300)
-    print(f"Saved RF overall species+unknown counts plot to {output_path}")
-    plt.close()
+    _plot_summary_series(
+        stats, output_path,
+        title='RF Overall Species Counts (Total vs Correct vs Unknown, Split by Truth Match)',
+        primary_series=[
+            dict(values=total_all, color='black', label='Total species (truth-matched count)'),
+            dict(values=correct_all, color='green', label='Correct species (count)'),
+            dict(values=unknown_with_truth, color='grey', linestyle='--', label='Unknown species (truth-matched count)'),
+            dict(values=unknown_no_truth, color='lightgrey', linestyle=':', label='Unknown extra predictions (no truth match count)'),
+        ],
+        primary_ylabel='Count', primary_ylim=(-1, None),
+        log_label='RF overall species+unknown counts plot',
+    )
 
 
 def _annotate_count_percentages(ax, display_names, correct_counts, total_counts, color):
@@ -814,112 +799,68 @@ def plot_rf_element_counts_summary(all_stats, output_path="rf_element_counts_vs_
     """Plot RF elemental-only true/correct counts including unknowns across datasets."""
     if not all_stats:
         return
-    all_stats = sorted(all_stats, key=lambda x: x.dataset)
-    datasets = [s.dataset for s in all_stats]
-    display_names = [d[:20] + '...' if len(d) > 20 else d for d in datasets]
-
-    true_ele = [int(getattr(s, 'rf_elemental_total', 0) or 0) for s in all_stats]
-    corr_ele = [int(getattr(s, 'rf_elemental_correct', 0) or 0) for s in all_stats]
-    true_ele_exc = [int(getattr(s, 'rf_elemental_total_exc', 0) or 0) for s in all_stats]
+    stats = sorted(all_stats, key=lambda x: x.dataset)
+    true_ele = [int(getattr(s, 'rf_elemental_total', 0) or 0) for s in stats]
+    corr_ele = [int(getattr(s, 'rf_elemental_correct', 0) or 0) for s in stats]
+    true_ele_exc = [int(getattr(s, 'rf_elemental_total_exc', 0) or 0) for s in stats]
     unknown_ele_truth = [max(0, ti - te) for ti, te in zip(true_ele, true_ele_exc)]
-    unknown_no_truth = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in all_stats]
+    unknown_no_truth = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in stats]
     total_true = sum(true_ele)
     total_correct = sum(corr_ele)
     total_acc = (total_correct / total_true * 100.0) if total_true else 0.0
-
-    fig, ax = plt.subplots(figsize=(14, 7))
-    ax.plot(display_names, true_ele, marker='o', color='blue', label='True elemental incl. unknowns (count)', linewidth=1.5)
-    ax.plot(
-        display_names, corr_ele, marker='o', color='navy',
-        label=f'Correct elemental incl. unknowns (count): total {total_correct}/{total_true} ({total_acc:.1f}%)',
-        linewidth=1.5
-    )
-    _annotate_count_percentages(ax, display_names, corr_ele, true_ele, 'navy')
-
-    ax.set_xlabel('Dataset')
-    ax.set_ylabel('Element count')
-    plt.xticks(rotation=90, ha='center', fontsize=8)
     main_ymax = max(true_ele + corr_ele + [1])
-    ax.set_ylim(bottom=-1, top=main_ymax * 1.18 + 1)
-    ax.grid(True, alpha=0.2)
-    plt.title(f'RF Elemental Classification Counts Including Unknowns (Total Correct: {total_correct}/{total_true}, {total_acc:.1f}%)')
 
-    ax2 = ax.twinx()
-    ax2.plot(
-        display_names, unknown_ele_truth, marker='o', color='grey',
-        label='Unknown elemental (truth-matched count)', linewidth=1.5, linestyle='--'
+    _plot_summary_series(
+        stats, output_path,
+        title=f'RF Elemental Classification Counts Including Unknowns (Total Correct: {total_correct}/{total_true}, {total_acc:.1f}%)',
+        primary_series=[
+            dict(values=true_ele, color='blue', label='True elemental incl. unknowns (count)'),
+            dict(values=corr_ele, color='navy',
+                 label=f'Correct elemental incl. unknowns (count): total {total_correct}/{total_true} ({total_acc:.1f}%)'),
+        ],
+        primary_ylabel='Element count', primary_ylim=(-1, main_ymax * 1.18 + 1),
+        annotate=dict(correct=corr_ele, total=true_ele, color='navy'),
+        secondary_series=[
+            dict(values=unknown_ele_truth, color='grey', linestyle='--', label='Unknown elemental (truth-matched count)'),
+            dict(values=unknown_no_truth, color='lightgrey', linestyle=':', label='Unknown extra predictions (no truth match count)'),
+        ],
+        secondary_ylabel='Unknown count', secondary_ylim=(-1, None),
+        log_label='RF elemental counts summary plot',
     )
-    ax2.plot(
-        display_names, unknown_no_truth, marker='o', color='lightgrey',
-        label='Unknown extra predictions (no truth match count)', linewidth=1.5, linestyle=':'
-    )
-    ax2.set_ylabel('Unknown count')
-    ax2.set_ylim(bottom=-1)
-
-    lines1, labels1 = ax.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
-
-    fig.tight_layout()
-    plt.savefig(output_path, dpi=300)
-    print(f"Saved RF elemental counts summary plot to {output_path}")
-    plt.close()
 
 
 def plot_rf_molecule_counts_summary(all_stats, output_path="rf_molecule_counts_vs_dataset.png"):
     """Plot RF molecule-only true/correct counts including unknowns across datasets."""
     if not all_stats:
         return
-    all_stats = sorted(all_stats, key=lambda x: x.dataset)
-    datasets = [s.dataset for s in all_stats]
-    display_names = [d[:20] + '...' if len(d) > 20 else d for d in datasets]
-
-    true_mol = [int(getattr(s, 'rf_molecular_total', 0) or 0) for s in all_stats]
-    corr_mol = [int(getattr(s, 'rf_molecular_correct', 0) or 0) for s in all_stats]
-    true_mol_exc = [int(getattr(s, 'rf_molecular_total_exc', 0) or 0) for s in all_stats]
+    stats = sorted(all_stats, key=lambda x: x.dataset)
+    true_mol = [int(getattr(s, 'rf_molecular_total', 0) or 0) for s in stats]
+    corr_mol = [int(getattr(s, 'rf_molecular_correct', 0) or 0) for s in stats]
+    true_mol_exc = [int(getattr(s, 'rf_molecular_total_exc', 0) or 0) for s in stats]
     unknown_mol_truth = [max(0, ti - te) for ti, te in zip(true_mol, true_mol_exc)]
-    unknown_no_truth = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in all_stats]
+    unknown_no_truth = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in stats]
     total_true = sum(true_mol)
     total_correct = sum(corr_mol)
     total_acc = (total_correct / total_true * 100.0) if total_true else 0.0
-
-    fig, ax = plt.subplots(figsize=(14, 7))
-    ax.plot(display_names, true_mol, marker='o', color='black', label='True molecules incl. unknowns (count)', linewidth=1.5)
-    ax.plot(
-        display_names, corr_mol, marker='o', color='purple',
-        label=f'Correct molecules incl. unknowns (count): total {total_correct}/{total_true} ({total_acc:.1f}%)',
-        linewidth=1.5
-    )
-    _annotate_count_percentages(ax, display_names, corr_mol, true_mol, 'purple')
-
-    ax.set_xlabel('Dataset')
-    ax.set_ylabel('Molecule count')
-    plt.xticks(rotation=90, ha='center', fontsize=8)
     main_ymax = max(true_mol + corr_mol + [1])
-    ax.set_ylim(bottom=-1, top=main_ymax * 1.18 + 1)
-    ax.grid(True, alpha=0.2)
-    plt.title(f'RF Molecular Classification Counts Including Unknowns (Total Correct: {total_correct}/{total_true}, {total_acc:.1f}%)')
 
-    ax2 = ax.twinx()
-    ax2.plot(
-        display_names, unknown_mol_truth, marker='o', color='grey',
-        label='Unknown molecules (truth-matched count)', linewidth=1.5, linestyle='--'
+    _plot_summary_series(
+        stats, output_path,
+        title=f'RF Molecular Classification Counts Including Unknowns (Total Correct: {total_correct}/{total_true}, {total_acc:.1f}%)',
+        primary_series=[
+            dict(values=true_mol, color='black', label='True molecules incl. unknowns (count)'),
+            dict(values=corr_mol, color='purple',
+                 label=f'Correct molecules incl. unknowns (count): total {total_correct}/{total_true} ({total_acc:.1f}%)'),
+        ],
+        primary_ylabel='Molecule count', primary_ylim=(-1, main_ymax * 1.18 + 1),
+        annotate=dict(correct=corr_mol, total=true_mol, color='purple'),
+        secondary_series=[
+            dict(values=unknown_mol_truth, color='grey', linestyle='--', label='Unknown molecules (truth-matched count)'),
+            dict(values=unknown_no_truth, color='lightgrey', linestyle=':', label='Unknown extra predictions (no truth match count)'),
+        ],
+        secondary_ylabel='Unknown count', secondary_ylim=(-1, None),
+        log_label='RF molecular counts summary plot',
     )
-    ax2.plot(
-        display_names, unknown_no_truth, marker='o', color='lightgrey',
-        label='Unknown extra predictions (no truth match count)', linewidth=1.5, linestyle=':'
-    )
-    ax2.set_ylabel('Unknown count')
-    ax2.set_ylim(bottom=-1)
-
-    lines1, labels1 = ax.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
-
-    fig.tight_layout()
-    plt.savefig(output_path, dpi=300)
-    print(f"Saved RF molecular counts summary plot to {output_path}")
-    plt.close()
 
 
 def plot_rf_element_counts_excluding_unknowns_summary(
@@ -929,56 +870,34 @@ def plot_rf_element_counts_excluding_unknowns_summary(
     """Plot RF elemental-only true/correct counts excluding unknowns across datasets."""
     if not all_stats:
         return
-    all_stats = sorted(all_stats, key=lambda x: x.dataset)
-    datasets = [s.dataset for s in all_stats]
-    display_names = [d[:20] + '...' if len(d) > 20 else d for d in datasets]
-
-    true_ele = [int(getattr(s, 'rf_elemental_total_exc', 0) or 0) for s in all_stats]
-    corr_ele = [int(getattr(s, 'rf_elemental_correct_exc', 0) or 0) for s in all_stats]
-    true_ele_inc = [int(getattr(s, 'rf_elemental_total', 0) or 0) for s in all_stats]
+    stats = sorted(all_stats, key=lambda x: x.dataset)
+    true_ele = [int(getattr(s, 'rf_elemental_total_exc', 0) or 0) for s in stats]
+    corr_ele = [int(getattr(s, 'rf_elemental_correct_exc', 0) or 0) for s in stats]
+    true_ele_inc = [int(getattr(s, 'rf_elemental_total', 0) or 0) for s in stats]
     unknown_ele_truth = [max(0, ti - te) for ti, te in zip(true_ele_inc, true_ele)]
-    unknown_no_truth = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in all_stats]
+    unknown_no_truth = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in stats]
     total_true = sum(true_ele)
     total_correct = sum(corr_ele)
     total_acc = (total_correct / total_true * 100.0) if total_true else 0.0
-
-    fig, ax = plt.subplots(figsize=(14, 7))
-    ax.plot(display_names, true_ele, marker='o', color='blue', label='True elemental excl. unknowns (count)', linewidth=1.5)
-    ax.plot(
-        display_names, corr_ele, marker='o', color='navy',
-        label=f'Correct elemental excl. unknowns (count): total {total_correct}/{total_true} ({total_acc:.1f}%)',
-        linewidth=1.5
-    )
-    _annotate_count_percentages(ax, display_names, corr_ele, true_ele, 'navy')
-
-    ax.set_xlabel('Dataset')
-    ax.set_ylabel('Element count')
-    plt.xticks(rotation=90, ha='center', fontsize=8)
     main_ymax = max(true_ele + corr_ele + [1])
-    ax.set_ylim(bottom=-1, top=main_ymax * 1.18 + 1)
-    ax.grid(True, alpha=0.2)
-    plt.title(f'RF Elemental Classification Counts Excluding Unknowns (Total Correct: {total_correct}/{total_true}, {total_acc:.1f}%)')
 
-    ax2 = ax.twinx()
-    ax2.plot(
-        display_names, unknown_ele_truth, marker='o', color='grey',
-        label='Unknown elemental (truth-matched count)', linewidth=1.5, linestyle='--'
+    _plot_summary_series(
+        stats, output_path,
+        title=f'RF Elemental Classification Counts Excluding Unknowns (Total Correct: {total_correct}/{total_true}, {total_acc:.1f}%)',
+        primary_series=[
+            dict(values=true_ele, color='blue', label='True elemental excl. unknowns (count)'),
+            dict(values=corr_ele, color='navy',
+                 label=f'Correct elemental excl. unknowns (count): total {total_correct}/{total_true} ({total_acc:.1f}%)'),
+        ],
+        primary_ylabel='Element count', primary_ylim=(-1, main_ymax * 1.18 + 1),
+        annotate=dict(correct=corr_ele, total=true_ele, color='navy'),
+        secondary_series=[
+            dict(values=unknown_ele_truth, color='grey', linestyle='--', label='Unknown elemental (truth-matched count)'),
+            dict(values=unknown_no_truth, color='lightgrey', linestyle=':', label='Unknown extra predictions (no truth match count)'),
+        ],
+        secondary_ylabel='Unknown count', secondary_ylim=(-1, None),
+        log_label='RF elemental counts excluding unknowns summary plot',
     )
-    ax2.plot(
-        display_names, unknown_no_truth, marker='o', color='lightgrey',
-        label='Unknown extra predictions (no truth match count)', linewidth=1.5, linestyle=':'
-    )
-    ax2.set_ylabel('Unknown count')
-    ax2.set_ylim(bottom=-1)
-
-    lines1, labels1 = ax.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
-
-    fig.tight_layout()
-    plt.savefig(output_path, dpi=300)
-    print(f"Saved RF elemental counts excluding unknowns summary plot to {output_path}")
-    plt.close()
 
 
 def plot_rf_molecule_counts_excluding_unknowns_summary(
@@ -988,56 +907,87 @@ def plot_rf_molecule_counts_excluding_unknowns_summary(
     """Plot RF molecule-only true/correct counts excluding unknowns across datasets."""
     if not all_stats:
         return
-    all_stats = sorted(all_stats, key=lambda x: x.dataset)
-    datasets = [s.dataset for s in all_stats]
-    display_names = [d[:20] + '...' if len(d) > 20 else d for d in datasets]
-
-    true_mol = [int(getattr(s, 'rf_molecular_total_exc', 0) or 0) for s in all_stats]
-    corr_mol = [int(getattr(s, 'rf_molecular_correct_exc', 0) or 0) for s in all_stats]
-    true_mol_inc = [int(getattr(s, 'rf_molecular_total', 0) or 0) for s in all_stats]
+    stats = sorted(all_stats, key=lambda x: x.dataset)
+    true_mol = [int(getattr(s, 'rf_molecular_total_exc', 0) or 0) for s in stats]
+    corr_mol = [int(getattr(s, 'rf_molecular_correct_exc', 0) or 0) for s in stats]
+    true_mol_inc = [int(getattr(s, 'rf_molecular_total', 0) or 0) for s in stats]
     unknown_mol_truth = [max(0, ti - te) for ti, te in zip(true_mol_inc, true_mol)]
-    unknown_no_truth = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in all_stats]
+    unknown_no_truth = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in stats]
     total_true = sum(true_mol)
     total_correct = sum(corr_mol)
     total_acc = (total_correct / total_true * 100.0) if total_true else 0.0
-
-    fig, ax = plt.subplots(figsize=(14, 7))
-    ax.plot(display_names, true_mol, marker='o', color='black', label='True molecules excl. unknowns (count)', linewidth=1.5)
-    ax.plot(
-        display_names, corr_mol, marker='o', color='purple',
-        label=f'Correct molecules excl. unknowns (count): total {total_correct}/{total_true} ({total_acc:.1f}%)',
-        linewidth=1.5
-    )
-    _annotate_count_percentages(ax, display_names, corr_mol, true_mol, 'purple')
-
-    ax.set_xlabel('Dataset')
-    ax.set_ylabel('Molecule count')
-    plt.xticks(rotation=90, ha='center', fontsize=8)
     main_ymax = max(true_mol + corr_mol + [1])
-    ax.set_ylim(bottom=-1, top=main_ymax * 1.18 + 1)
-    ax.grid(True, alpha=0.2)
-    plt.title(f'RF Molecular Classification Counts Excluding Unknowns (Total Correct: {total_correct}/{total_true}, {total_acc:.1f}%)')
 
-    ax2 = ax.twinx()
-    ax2.plot(
-        display_names, unknown_mol_truth, marker='o', color='grey',
-        label='Unknown molecules (truth-matched count)', linewidth=1.5, linestyle='--'
+    _plot_summary_series(
+        stats, output_path,
+        title=f'RF Molecular Classification Counts Excluding Unknowns (Total Correct: {total_correct}/{total_true}, {total_acc:.1f}%)',
+        primary_series=[
+            dict(values=true_mol, color='black', label='True molecules excl. unknowns (count)'),
+            dict(values=corr_mol, color='purple',
+                 label=f'Correct molecules excl. unknowns (count): total {total_correct}/{total_true} ({total_acc:.1f}%)'),
+        ],
+        primary_ylabel='Molecule count', primary_ylim=(-1, main_ymax * 1.18 + 1),
+        annotate=dict(correct=corr_mol, total=true_mol, color='purple'),
+        secondary_series=[
+            dict(values=unknown_mol_truth, color='grey', linestyle='--', label='Unknown molecules (truth-matched count)'),
+            dict(values=unknown_no_truth, color='lightgrey', linestyle=':', label='Unknown extra predictions (no truth match count)'),
+        ],
+        secondary_ylabel='Unknown count', secondary_ylim=(-1, None),
+        log_label='RF molecular counts excluding unknowns summary plot',
     )
-    ax2.plot(
-        display_names, unknown_no_truth, marker='o', color='lightgrey',
-        label='Unknown extra predictions (no truth match count)', linewidth=1.5, linestyle=':'
+
+
+def _mean_where_gated(values, gates):
+    """Mean of `values` at positions where the matching `gates` entry is > 0; 0.0 if none."""
+    filtered = [v for v, g in zip(values, gates) if g > 0]
+    return float(np.mean(filtered)) if filtered else 0.0
+
+
+def _rf_accuracy_pct_series(stats, total_key, correct_key, total_inc_key=None):
+    """Shared data prep for the plot_rf_*_accuracy_pct_* functions below.
+
+    Returns (pct, avg_pct, unk_frac_truth, avg_unk_truth, unk_frac_extra, avg_unk_extra) where
+    `pct` is correct/total*100 using `correct_key`/`total_key`, and the unknown fractions compare
+    `total_inc_key` (including-unknowns total, defaults to `total_key` when accuracy already
+    counts unknowns as incorrect) against the excluding-unknowns total.
+    """
+    totals = [int(getattr(s, total_key, 0) or 0) for s in stats]
+    corrects = [int(getattr(s, correct_key, 0) or 0) for s in stats]
+    totals_inc = [int(getattr(s, total_inc_key or total_key, 0) or 0) for s in stats]
+    totals_exc = totals if total_inc_key else [int(getattr(s, total_key + '_exc', 0) or 0) for s in stats]
+    extra_unknown_counts = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in stats]
+    extra_totals = [int(getattr(s, 'predicted_peaks_no_truth', 0) or 0) for s in stats]
+
+    pct = [(c / t * 100.0) if t > 0 else 0.0 for c, t in zip(corrects, totals)]
+    unk_frac_truth = [((ti - te) / ti) if ti > 0 else 0.0 for ti, te in zip(totals_inc, totals_exc)]
+    unk_frac_extra = [(u / t) if t > 0 else 0.0 for u, t in zip(extra_unknown_counts, extra_totals)]
+    return (
+        pct, _mean_where_gated(pct, totals),
+        unk_frac_truth, _mean_where_gated(unk_frac_truth, totals_inc),
+        unk_frac_extra, _mean_where_gated(unk_frac_extra, extra_totals),
     )
-    ax2.set_ylabel('Unknown count')
-    ax2.set_ylim(bottom=-1)
 
-    lines1, labels1 = ax.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
 
-    fig.tight_layout()
-    plt.savefig(output_path, dpi=300)
-    print(f"Saved RF molecular counts excluding unknowns summary plot to {output_path}")
-    plt.close()
+def _plot_rf_accuracy_pct_summary(stats, output_path, title, species_label, color, pct_label,
+                                   total_key, correct_key, total_inc_key=None, log_label=''):
+    """Shared renderer for the 4 plot_rf_*_accuracy_pct_* functions below."""
+    pct, avg_pct, unk_frac_truth, avg_unk_truth, unk_frac_extra, avg_unk_extra = _rf_accuracy_pct_series(
+        stats, total_key, correct_key, total_inc_key
+    )
+    _plot_summary_series(
+        stats, output_path,
+        title=title,
+        primary_series=[dict(values=pct, color=color, label=f'{pct_label} (Avg: {avg_pct:.1f}%)')],
+        primary_ylabel='Correct (%)', primary_ylim=(-5, 105),
+        secondary_series=[
+            dict(values=unk_frac_truth, color='grey', linestyle='--',
+                 label=f'{species_label} unknown fraction (truth-matched, Avg: {avg_unk_truth:.3f})'),
+            dict(values=unk_frac_extra, color='lightgrey', linestyle=':',
+                 label=f'Extra unknown fraction (no truth match, Avg: {avg_unk_extra:.3f})'),
+        ],
+        secondary_ylabel='Unknown fraction', secondary_ylim=(-0.05, 1.05),
+        log_label=log_label,
+    )
 
 
 def plot_rf_element_accuracy_pct_summary(all_stats, output_path="rf_element_accuracy_pct_vs_dataset.png"):
@@ -1047,61 +997,15 @@ def plot_rf_element_accuracy_pct_summary(all_stats, output_path="rf_element_accu
     """
     if not all_stats:
         return
-    all_stats = sorted(all_stats, key=lambda x: x.dataset)
-    datasets = [s.dataset for s in all_stats]
-    display_names = [d[:20] + '...' if len(d) > 20 else d for d in datasets]
-
-    totals_inc = [int(getattr(s, 'rf_elemental_total', 0) or 0) for s in all_stats]
-    totals_exc = [int(getattr(s, 'rf_elemental_total_exc', 0) or 0) for s in all_stats]
-    corrects_exc = [int(getattr(s, 'rf_elemental_correct_exc', 0) or 0) for s in all_stats]
-    extra_unknown_counts = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in all_stats]
-    extra_totals = [int(getattr(s, 'predicted_peaks_no_truth', 0) or 0) for s in all_stats]
-
-    pct = [(c / t * 100.0) if t > 0 else 0.0 for c, t in zip(corrects_exc, totals_exc)]
-    pct_for_avg = [p for p, t in zip(pct, totals_exc) if t > 0]
-    avg_pct = float(np.mean(pct_for_avg)) if pct_for_avg else 0.0
-    unk_frac_truth = [((ti - te) / ti) if ti > 0 else 0.0 for ti, te in zip(totals_inc, totals_exc)]
-    unk_truth_for_avg = [u for u, ti in zip(unk_frac_truth, totals_inc) if ti > 0]
-    avg_unk_truth = float(np.mean(unk_truth_for_avg)) if unk_truth_for_avg else 0.0
-    unk_frac_extra = [(u / t) if t > 0 else 0.0 for u, t in zip(extra_unknown_counts, extra_totals)]
-    unk_extra_for_avg = [u for u, t in zip(unk_frac_extra, extra_totals) if t > 0]
-    avg_unk_extra = float(np.mean(unk_extra_for_avg)) if unk_extra_for_avg else 0.0
-
-    fig, ax = plt.subplots(figsize=(14, 7))
-    ax.plot(
-        display_names, pct, marker='o', color='navy',
-        label=f'Elemental correct (%) (Avg: {avg_pct:.1f}%)', linewidth=1.5
+    stats = sorted(all_stats, key=lambda x: x.dataset)
+    _plot_rf_accuracy_pct_summary(
+        stats, output_path,
+        title='RF Elemental Classification Accuracy (Excluding Unknowns)',
+        species_label='Element', color='navy', pct_label='Elemental correct (%)',
+        total_key='rf_elemental_total_exc', correct_key='rf_elemental_correct_exc',
+        total_inc_key='rf_elemental_total',
+        log_label='RF elemental accuracy percent plot',
     )
-
-    ax.set_xlabel('Dataset')
-    ax.set_ylabel('Correct (%)')
-    plt.xticks(rotation=90, ha='center', fontsize=8)
-    ax.set_ylim(-5, 105)
-    ax.grid(True, alpha=0.2)
-    plt.title('RF Elemental Classification Accuracy (Excluding Unknowns)')
-
-    ax2 = ax.twinx()
-    ax2.plot(
-        display_names, unk_frac_truth, marker='o', color='grey',
-        label=f'Element unknown fraction (truth-matched, Avg: {avg_unk_truth:.3f})',
-        linewidth=1.5, linestyle='--'
-    )
-    ax2.plot(
-        display_names, unk_frac_extra, marker='o', color='lightgrey',
-        label=f'Extra unknown fraction (no truth match, Avg: {avg_unk_extra:.3f})',
-        linewidth=1.5, linestyle=':'
-    )
-    ax2.set_ylabel('Unknown fraction')
-    ax2.set_ylim(-0.05, 1.05)
-
-    lines1, labels1 = ax.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
-
-    fig.tight_layout()
-    plt.savefig(output_path, dpi=300)
-    print(f"Saved RF elemental accuracy percent plot to {output_path}")
-    plt.close()
 
 
 def plot_rf_molecule_accuracy_pct_summary(all_stats, output_path="rf_molecule_accuracy_pct_vs_dataset.png"):
@@ -1111,61 +1015,15 @@ def plot_rf_molecule_accuracy_pct_summary(all_stats, output_path="rf_molecule_ac
     """
     if not all_stats:
         return
-    all_stats = sorted(all_stats, key=lambda x: x.dataset)
-    datasets = [s.dataset for s in all_stats]
-    display_names = [d[:20] + '...' if len(d) > 20 else d for d in datasets]
-
-    totals_inc = [int(getattr(s, 'rf_molecular_total', 0) or 0) for s in all_stats]
-    totals_exc = [int(getattr(s, 'rf_molecular_total_exc', 0) or 0) for s in all_stats]
-    corrects_exc = [int(getattr(s, 'rf_molecular_correct_exc', 0) or 0) for s in all_stats]
-    extra_unknown_counts = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in all_stats]
-    extra_totals = [int(getattr(s, 'predicted_peaks_no_truth', 0) or 0) for s in all_stats]
-
-    pct = [(c / t * 100.0) if t > 0 else 0.0 for c, t in zip(corrects_exc, totals_exc)]
-    pct_for_avg = [p for p, t in zip(pct, totals_exc) if t > 0]
-    avg_pct = float(np.mean(pct_for_avg)) if pct_for_avg else 0.0
-    unk_frac_truth = [((ti - te) / ti) if ti > 0 else 0.0 for ti, te in zip(totals_inc, totals_exc)]
-    unk_truth_for_avg = [u for u, ti in zip(unk_frac_truth, totals_inc) if ti > 0]
-    avg_unk_truth = float(np.mean(unk_truth_for_avg)) if unk_truth_for_avg else 0.0
-    unk_frac_extra = [(u / t) if t > 0 else 0.0 for u, t in zip(extra_unknown_counts, extra_totals)]
-    unk_extra_for_avg = [u for u, t in zip(unk_frac_extra, extra_totals) if t > 0]
-    avg_unk_extra = float(np.mean(unk_extra_for_avg)) if unk_extra_for_avg else 0.0
-
-    fig, ax = plt.subplots(figsize=(14, 7))
-    ax.plot(
-        display_names, pct, marker='o', color='purple',
-        label=f'Molecular correct (%) (Avg: {avg_pct:.1f}%)', linewidth=1.5
+    stats = sorted(all_stats, key=lambda x: x.dataset)
+    _plot_rf_accuracy_pct_summary(
+        stats, output_path,
+        title='RF Molecular Classification Accuracy (Excluding Unknowns)',
+        species_label='Molecule', color='purple', pct_label='Molecular correct (%)',
+        total_key='rf_molecular_total_exc', correct_key='rf_molecular_correct_exc',
+        total_inc_key='rf_molecular_total',
+        log_label='RF molecular accuracy percent plot',
     )
-
-    ax.set_xlabel('Dataset')
-    ax.set_ylabel('Correct (%)')
-    plt.xticks(rotation=90, ha='center', fontsize=8)
-    ax.set_ylim(-5, 105)
-    ax.grid(True, alpha=0.2)
-    plt.title('RF Molecular Classification Accuracy (Excluding Unknowns)')
-
-    ax2 = ax.twinx()
-    ax2.plot(
-        display_names, unk_frac_truth, marker='o', color='grey',
-        label=f'Molecule unknown fraction (truth-matched, Avg: {avg_unk_truth:.3f})',
-        linewidth=1.5, linestyle='--'
-    )
-    ax2.plot(
-        display_names, unk_frac_extra, marker='o', color='lightgrey',
-        label=f'Extra unknown fraction (no truth match, Avg: {avg_unk_extra:.3f})',
-        linewidth=1.5, linestyle=':'
-    )
-    ax2.set_ylabel('Unknown fraction')
-    ax2.set_ylim(-0.05, 1.05)
-
-    lines1, labels1 = ax.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
-
-    fig.tight_layout()
-    plt.savefig(output_path, dpi=300)
-    print(f"Saved RF molecular accuracy percent plot to {output_path}")
-    plt.close()
 
 
 def plot_rf_element_accuracy_pct_including_unknowns_summary(
@@ -1178,61 +1036,14 @@ def plot_rf_element_accuracy_pct_including_unknowns_summary(
     """
     if not all_stats:
         return
-    all_stats = sorted(all_stats, key=lambda x: x.dataset)
-    datasets = [s.dataset for s in all_stats]
-    display_names = [d[:20] + '...' if len(d) > 20 else d for d in datasets]
-
-    totals_inc = [int(getattr(s, 'rf_elemental_total', 0) or 0) for s in all_stats]
-    corrects_inc = [int(getattr(s, 'rf_elemental_correct', 0) or 0) for s in all_stats]
-    totals_exc = [int(getattr(s, 'rf_elemental_total_exc', 0) or 0) for s in all_stats]
-    extra_unknown_counts = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in all_stats]
-    extra_totals = [int(getattr(s, 'predicted_peaks_no_truth', 0) or 0) for s in all_stats]
-
-    pct = [(c / t * 100.0) if t > 0 else 0.0 for c, t in zip(corrects_inc, totals_inc)]
-    pct_for_avg = [p for p, t in zip(pct, totals_inc) if t > 0]
-    avg_pct = float(np.mean(pct_for_avg)) if pct_for_avg else 0.0
-    unk_frac_truth = [((ti - te) / ti) if ti > 0 else 0.0 for ti, te in zip(totals_inc, totals_exc)]
-    unk_truth_for_avg = [u for u, ti in zip(unk_frac_truth, totals_inc) if ti > 0]
-    avg_unk_truth = float(np.mean(unk_truth_for_avg)) if unk_truth_for_avg else 0.0
-    unk_frac_extra = [(u / t) if t > 0 else 0.0 for u, t in zip(extra_unknown_counts, extra_totals)]
-    unk_extra_for_avg = [u for u, t in zip(unk_frac_extra, extra_totals) if t > 0]
-    avg_unk_extra = float(np.mean(unk_extra_for_avg)) if unk_extra_for_avg else 0.0
-
-    fig, ax = plt.subplots(figsize=(14, 7))
-    ax.plot(
-        display_names, pct, marker='o', color='navy',
-        label=f'Elemental correct incl. unknowns (%) (Avg: {avg_pct:.1f}%)', linewidth=1.5
+    stats = sorted(all_stats, key=lambda x: x.dataset)
+    _plot_rf_accuracy_pct_summary(
+        stats, output_path,
+        title='RF Elemental Classification Accuracy (Including Unknowns)',
+        species_label='Element', color='navy', pct_label='Elemental correct incl. unknowns (%)',
+        total_key='rf_elemental_total', correct_key='rf_elemental_correct',
+        log_label='RF elemental accuracy percent including unknowns plot',
     )
-
-    ax.set_xlabel('Dataset')
-    ax.set_ylabel('Correct (%)')
-    plt.xticks(rotation=90, ha='center', fontsize=8)
-    ax.set_ylim(-5, 105)
-    ax.grid(True, alpha=0.2)
-    plt.title('RF Elemental Classification Accuracy (Including Unknowns)')
-
-    ax2 = ax.twinx()
-    ax2.plot(
-        display_names, unk_frac_truth, marker='o', color='grey',
-        label=f'Element unknown fraction (truth-matched, Avg: {avg_unk_truth:.3f})',
-        linewidth=1.5, linestyle='--'
-    )
-    ax2.plot(
-        display_names, unk_frac_extra, marker='o', color='lightgrey',
-        label=f'Extra unknown fraction (no truth match, Avg: {avg_unk_extra:.3f})',
-        linewidth=1.5, linestyle=':'
-    )
-    ax2.set_ylabel('Unknown fraction')
-    ax2.set_ylim(-0.05, 1.05)
-
-    lines1, labels1 = ax.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
-
-    fig.tight_layout()
-    plt.savefig(output_path, dpi=300)
-    print(f"Saved RF elemental accuracy percent including unknowns plot to {output_path}")
-    plt.close()
 
 
 def plot_rf_molecule_accuracy_pct_including_unknowns_summary(
@@ -1245,93 +1056,52 @@ def plot_rf_molecule_accuracy_pct_including_unknowns_summary(
     """
     if not all_stats:
         return
-    all_stats = sorted(all_stats, key=lambda x: x.dataset)
-    datasets = [s.dataset for s in all_stats]
-    display_names = [d[:20] + '...' if len(d) > 20 else d for d in datasets]
-
-    totals_inc = [int(getattr(s, 'rf_molecular_total', 0) or 0) for s in all_stats]
-    corrects_inc = [int(getattr(s, 'rf_molecular_correct', 0) or 0) for s in all_stats]
-    totals_exc = [int(getattr(s, 'rf_molecular_total_exc', 0) or 0) for s in all_stats]
-    extra_unknown_counts = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in all_stats]
-    extra_totals = [int(getattr(s, 'predicted_peaks_no_truth', 0) or 0) for s in all_stats]
-
-    pct = [(c / t * 100.0) if t > 0 else 0.0 for c, t in zip(corrects_inc, totals_inc)]
-    pct_for_avg = [p for p, t in zip(pct, totals_inc) if t > 0]
-    avg_pct = float(np.mean(pct_for_avg)) if pct_for_avg else 0.0
-    unk_frac_truth = [((ti - te) / ti) if ti > 0 else 0.0 for ti, te in zip(totals_inc, totals_exc)]
-    unk_truth_for_avg = [u for u, ti in zip(unk_frac_truth, totals_inc) if ti > 0]
-    avg_unk_truth = float(np.mean(unk_truth_for_avg)) if unk_truth_for_avg else 0.0
-    unk_frac_extra = [(u / t) if t > 0 else 0.0 for u, t in zip(extra_unknown_counts, extra_totals)]
-    unk_extra_for_avg = [u for u, t in zip(unk_frac_extra, extra_totals) if t > 0]
-    avg_unk_extra = float(np.mean(unk_extra_for_avg)) if unk_extra_for_avg else 0.0
-
-    fig, ax = plt.subplots(figsize=(14, 7))
-    ax.plot(
-        display_names, pct, marker='o', color='purple',
-        label=f'Molecular correct incl. unknowns (%) (Avg: {avg_pct:.1f}%)', linewidth=1.5
+    stats = sorted(all_stats, key=lambda x: x.dataset)
+    _plot_rf_accuracy_pct_summary(
+        stats, output_path,
+        title='RF Molecular Classification Accuracy (Including Unknowns)',
+        species_label='Molecule', color='purple', pct_label='Molecular correct incl. unknowns (%)',
+        total_key='rf_molecular_total', correct_key='rf_molecular_correct',
+        log_label='RF molecular accuracy percent including unknowns plot',
     )
-
-    ax.set_xlabel('Dataset')
-    ax.set_ylabel('Correct (%)')
-    plt.xticks(rotation=90, ha='center', fontsize=8)
-    ax.set_ylim(-5, 105)
-    ax.grid(True, alpha=0.2)
-    plt.title('RF Molecular Classification Accuracy (Including Unknowns)')
-
-    ax2 = ax.twinx()
-    ax2.plot(
-        display_names, unk_frac_truth, marker='o', color='grey',
-        label=f'Molecule unknown fraction (truth-matched, Avg: {avg_unk_truth:.3f})',
-        linewidth=1.5, linestyle='--'
-    )
-    ax2.plot(
-        display_names, unk_frac_extra, marker='o', color='lightgrey',
-        label=f'Extra unknown fraction (no truth match, Avg: {avg_unk_extra:.3f})',
-        linewidth=1.5, linestyle=':'
-    )
-    ax2.set_ylabel('Unknown fraction')
-    ax2.set_ylim(-0.05, 1.05)
-
-    lines1, labels1 = ax.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
-
-    fig.tight_layout()
-    plt.savefig(output_path, dpi=300)
-    print(f"Saved RF molecular accuracy percent including unknowns plot to {output_path}")
-    plt.close()
 
 
 def plot_yolo_metrics_summary(all_stats, output_path="yolo_metrics_vs_dataset.png"):
     """Generates a summary plot for YOLO metrics across datasets."""
     if not all_stats:
         return
-    all_stats = sorted(all_stats, key=lambda x: x.dataset)
-    datasets = [s.dataset for s in all_stats]
-    display_names = [d[:20] + '...' if len(d) > 20 else d for d in datasets]
-    precision = [s.precision for s in all_stats]
-    recall = [s.recall for s in all_stats]
-    f1 = [s.f1 for s in all_stats]
+    stats = sorted(all_stats, key=lambda x: x.dataset)
+    precision = [s.precision for s in stats]
+    recall = [s.recall for s in stats]
+    f1 = [s.f1 for s in stats]
 
-    avg_p = np.mean(precision)
-    avg_r = np.mean(recall)
-    avg_f1 = np.mean(f1)
+    _plot_summary_series(
+        stats, output_path,
+        title='YOLO Peak Detection Performance across Datasets',
+        primary_series=[
+            dict(values=precision, color='red', label=f'Precision (Avg: {np.mean(precision):.3f})'),
+            dict(values=recall, color='green', label=f'Recall (Avg: {np.mean(recall):.3f})'),
+            dict(values=f1, color='blue', label=f'F1 Score (Avg: {np.mean(f1):.3f})'),
+        ],
+        primary_ylabel='Score', grid_linestyle='--', grid_alpha=0.6,
+        log_label='YOLO metrics summary plot',
+    )
 
-    plt.figure(figsize=(14, 7))
-    plt.plot(display_names, precision, marker='o', color='red', label=f'Precision (Avg: {avg_p:.3f})', linewidth=1.5)
-    plt.plot(display_names, recall, marker='o', color='green', label=f'Recall (Avg: {avg_r:.3f})', linewidth=1.5)
-    plt.plot(display_names, f1, marker='o', color='blue', label=f'F1 Score (Avg: {avg_f1:.3f})', linewidth=1.5)
 
-    plt.xticks(rotation=90, ha='center', fontsize=8)
-    plt.ylabel('Score')
-    plt.title('YOLO Peak Detection Performance across Datasets')
-    plt.grid(True, linestyle='--', alpha=0.6)
-    plt.legend()
-    plt.tight_layout()
+def _write_csv(path, fieldnames, rows):
+    """Write `rows` (dicts) to `path` as CSV with a header, using `fieldnames` order."""
+    with open(path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
 
-    plt.savefig(output_path, dpi=300)
-    print(f"Saved YOLO metrics summary plot to {output_path}")
-    plt.close()
+
+def _fmt_before_after(label, before, after, label_width=17):
+    """Format a '<label>: c/t (p%) -> c/t (p%)' line from (correct, total, pct) tuples,
+    padding the 'label:' column so multiple lines' numbers stay aligned."""
+    bc, bt, bp = before
+    ac, at, ap = after
+    return f"  {(label + ':').ljust(label_width)}{bc}/{bt} ({bp:.1f}%) -> {ac}/{at} ({ap:.1f}%)"
 
 
 def main():
@@ -1430,19 +1200,16 @@ def main():
                 'unknown_count', 'unknown_count_with_truth', 'unknown_count_no_truth',
                 'predicted_peaks_with_truth', 'predicted_peaks_no_truth',
             ]
-            with open(summary_file, 'w', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-                for row in all_stats:
-                    csv_row = {k: getattr(row, k) for k in fieldnames}
-                    writer.writerow(csv_row)
+            _write_csv(summary_file, fieldnames, ({k: getattr(row, k) for k in fieldnames} for row in all_stats))
 
-            try:
-                from write_dataset_peak_summaries import write_dataset_peak_summaries
-                written_peak_summaries = write_dataset_peak_summaries(Path(out_base))
-                print(f"Per-dataset peak summaries saved: {len(written_peak_summaries)} files")
-            except Exception as e:
-                print(f"  [Warn] Failed writing per-dataset peak summaries ({e})")
+            if write_dataset_peak_summaries is not None:
+                try:
+                    written_peak_summaries = write_dataset_peak_summaries(Path(out_base))
+                    print(f"Per-dataset peak summaries saved: {len(written_peak_summaries)} files")
+                except Exception as e:
+                    print(f"  [Warn] Failed writing per-dataset peak summaries ({e})")
+            else:
+                print("  [Warn] write_dataset_peak_summaries module not available; skipping per-dataset summaries")
 
             # If molecule rescue was enabled, print an overall before/after summary (excluding unknowns).
             if any(int(getattr(s, 'molecule_rescue_considered', 0) or 0) > 0 for s in all_stats):
@@ -1477,9 +1244,9 @@ def main():
                 mixed = sum(int(getattr(s, 'molecule_rescue_mixed_candidates', 0) or 0) for s in all_stats)
                 considered = sum(int(getattr(s, 'molecule_rescue_considered', 0) or 0) for s in all_stats)
                 print("\n==================== MOLECULE RESCUE SUMMARY (EXCLUDING UNKNOWNS) ====================")
-                print(f"  Overall species: {bc_s}/{bt_s} ({bp_s:.1f}%) -> {ac_s}/{at_s} ({ap_s:.1f}%)")
-                print(f"  Elemental only:  {bc_e}/{bt_e} ({bp_e:.1f}%) -> {ac_e}/{at_e} ({ap_e:.1f}%)")
-                print(f"  Molecular only:  {bc_m}/{bt_m} ({bp_m:.1f}%) -> {ac_m}/{at_m} ({ap_m:.1f}%)")
+                print(_fmt_before_after('Overall species', (bc_s, bt_s, bp_s), (ac_s, at_s, ap_s)))
+                print(_fmt_before_after('Elemental only', (bc_e, bt_e, bp_e), (ac_e, at_e, ap_e)))
+                print(_fmt_before_after('Molecular only', (bc_m, bt_m, bp_m), (ac_m, at_m, ap_m)))
                 print(f"  Rescue accepted: {overrides} overrides, {mixed} mixed candidates / {considered} candidates\n")
 
             # Aggregate identifications for YOLO model
@@ -1496,11 +1263,7 @@ def main():
 
             if yolo_export:
                 id_file = os.path.join(out_base, "yolo_identifications.csv")
-                with open(id_file, 'w', newline='') as f:
-                    writer = csv.DictWriter(f, fieldnames=['dataset', 'mass_center', 'mass_start', 'mass_end', 'identified_label'])
-                    writer.writeheader()
-                    for row in yolo_export:
-                        writer.writerow(row)
+                _write_csv(id_file, ['dataset', 'mass_center', 'mass_start', 'mass_end', 'identified_label'], yolo_export)
                 print(f"Global YOLO Identifications saved to {id_file}")
 
             # Generate summary plots (into the run output directory)
