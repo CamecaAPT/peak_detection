@@ -34,7 +34,7 @@ save_artifacts: false
 save_peak_ranges_txt: false
 separate_molecule_rf: false
 training_num_files: 5000
-training_path: peak_detection/Ionclassifier/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001
+training_path: peak_detection/IonIdentificationModels/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001
 unknown_confidence_threshold: 0.6
 unknown_mixed_element_molecule_confidence_threshold: 0.95
 unknown_molecule_rf: true

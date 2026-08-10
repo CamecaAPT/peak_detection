@@ -33,7 +33,7 @@ n_iter: 0
 save_peak_ranges_txt: true        # headless-specific tunable
 separate_molecule_rf: true        # headless-specific tunable
 timestamp: '20260625_153901'
-training_path: peak_detection/Ionclassifier/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001
+training_path: peak_detection/IonIdentificationModels/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001
 yolo_weights: best_v0_2026-06-23.pt
 ```
 
@@ -120,9 +120,9 @@ There are three distinct kinds of path. They resolve differently — this is the
 
 Resolved relative to the **package location** (the repo root containing `peak_detection/`), so they work no matter which directory you launch from:
 
-- **`--yolo_weights`** — just a filename; loaded from `peak_detection/RangingNN/modelweights/<name>` (default `best_v0_2026-06-23.pt`).
-- The model's internal `prediction_args.yaml` under `peak_detection/RangingNN/cfg/`.
-- **`--training_path`** — a *relative* value (e.g. the default `peak_detection/Ionclassifier/training_data/…`) is resolved against the package root, so it works from any working directory. Pass an **absolute** path to point elsewhere.
+- **`--yolo_weights`** — just a filename; loaded from `peak_detection/RangingModels/RangingNN/modelweights/<name>` (default `best_v0_2026-06-23.pt`).
+- The model's internal `prediction_args.yaml` under `peak_detection/RangingModels/RangingNN/cfg/`.
+- **`--training_path`** — a *relative* value (e.g. the default `peak_detection/IonIdentificationModels/training_data/…`) is resolved against the package root, so it works from any working directory. Pass an **absolute** path to point elsewhere.
 
 ### b. Input paths (you supply these; CWD-relative or absolute)
 

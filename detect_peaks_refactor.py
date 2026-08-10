@@ -247,7 +247,7 @@ def process_dataset(
     # RF parameters
     # NOTE: keyword defaults below mirror peak_detection.run_config.SHARED_PARAMS (the single
     # source of truth used by the CLI in main()); keep them in sync if either one changes.
-    training_path: str = 'peak_detection/Ionclassifier/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001',
+    training_path: str = 'peak_detection/IonIdentificationModels/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001',
     training_num_files: int = 10000,
     augment_molecule_training_charge_ratios: bool = False,
     molecule_rf_rescue_elements: bool = False,
@@ -424,31 +424,37 @@ def process_dataset(
     pc, rc, f1c = calculate_metrics(truth, all_predicted)
     print(f"  Total Combined Metrics: Precision={pc:.3f}, Recall={rc:.3f}, F1={f1c:.3f}")
 
-    # Calculate final found peaks (TP) and split unknowns by whether the predicted range
-    # matches any truth range. Single pass: each (predicted, truth) IoU is computed once.
-    matched_truth = set()
+    # Calculate final found peaks (TP)
+    tp_count = 0
+    if len(truth) > 0 and len(all_predicted) > 0:
+        matched_truth = set()
+        for p in all_predicted:
+            for i, t in enumerate(truth):
+                if calculate_iou(p, t) > 0.1:
+                    matched_truth.add(i)
+        tp_count = len(matched_truth)
+
+    # Split unknowns by whether the predicted range matches any truth range.
     pred_with_truth = 0
     pred_no_truth = 0
     unknown_with_truth = 0
     unknown_no_truth = 0
-    for p in all_predicted:
-        best_iou = 0.0
-        for i, t in enumerate(truth):
-            iou_val = calculate_iou(p, t)
-            if iou_val > 0.1:
-                matched_truth.add(i)
-            if iou_val > best_iou:
-                best_iou = iou_val
-        has_truth = best_iou > 0.1
-        if has_truth:
-            pred_with_truth += 1
-            if getattr(p, 'is_unknown', False):
-                unknown_with_truth += 1
-        else:
-            pred_no_truth += 1
-            if getattr(p, 'is_unknown', False):
-                unknown_no_truth += 1
-    tp_count = len(matched_truth)
+    if len(all_predicted) > 0:
+        for p in all_predicted:
+            best_iou = 0.0
+            for t in truth:
+                iou_val = calculate_iou(p, t)
+                if iou_val > best_iou:
+                    best_iou = iou_val
+            has_truth = best_iou > 0.1
+            if has_truth:
+                pred_with_truth += 1
+                if getattr(p, 'is_unknown', False):
+                    unknown_with_truth += 1
+            else:
+                pred_no_truth += 1
+                if getattr(p, 'is_unknown', False):
+                    unknown_no_truth += 1
 
     # Calculate min/max mass ranges
     true_min = min([t.start for t in truth]) if truth else 0
@@ -1088,22 +1094,6 @@ def plot_yolo_metrics_summary(all_stats, output_path="yolo_metrics_vs_dataset.pn
     )
 
 
-def _write_csv(path, fieldnames, rows):
-    """Write `rows` (dicts) to `path` as CSV with a header, using `fieldnames` order."""
-    with open(path, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def _fmt_before_after(label, before, after, label_width=17):
-    """Format a '<label>: c/t (p%) -> c/t (p%)' line from (correct, total, pct) tuples,
-    padding the 'label:' column so multiple lines' numbers stay aligned."""
-    bc, bt, bp = before
-    ac, at, ap = after
-    return f"  {(label + ':').ljust(label_width)}{bc}/{bt} ({bp:.1f}%) -> {ac}/{at} ({ap:.1f}%)"
-
-
 def main():
     parser = argparse.ArgumentParser(description="Peak detection for APT data (v2).")
     parser.add_argument("--config", type=str, default=None,
@@ -1200,7 +1190,12 @@ def main():
                 'unknown_count', 'unknown_count_with_truth', 'unknown_count_no_truth',
                 'predicted_peaks_with_truth', 'predicted_peaks_no_truth',
             ]
-            _write_csv(summary_file, fieldnames, ({k: getattr(row, k) for k in fieldnames} for row in all_stats))
+            with open(summary_file, 'w', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                for row in all_stats:
+                    csv_row = {k: getattr(row, k) for k in fieldnames}
+                    writer.writerow(csv_row)
 
             if write_dataset_peak_summaries is not None:
                 try:
@@ -1244,9 +1239,9 @@ def main():
                 mixed = sum(int(getattr(s, 'molecule_rescue_mixed_candidates', 0) or 0) for s in all_stats)
                 considered = sum(int(getattr(s, 'molecule_rescue_considered', 0) or 0) for s in all_stats)
                 print("\n==================== MOLECULE RESCUE SUMMARY (EXCLUDING UNKNOWNS) ====================")
-                print(_fmt_before_after('Overall species', (bc_s, bt_s, bp_s), (ac_s, at_s, ap_s)))
-                print(_fmt_before_after('Elemental only', (bc_e, bt_e, bp_e), (ac_e, at_e, ap_e)))
-                print(_fmt_before_after('Molecular only', (bc_m, bt_m, bp_m), (ac_m, at_m, ap_m)))
+                print(f"  Overall species: {bc_s}/{bt_s} ({bp_s:.1f}%) -> {ac_s}/{at_s} ({ap_s:.1f}%)")
+                print(f"  Elemental only:  {bc_e}/{bt_e} ({bp_e:.1f}%) -> {ac_e}/{at_e} ({ap_e:.1f}%)")
+                print(f"  Molecular only:  {bc_m}/{bt_m} ({bp_m:.1f}%) -> {ac_m}/{at_m} ({ap_m:.1f}%)")
                 print(f"  Rescue accepted: {overrides} overrides, {mixed} mixed candidates / {considered} candidates\n")
 
             # Aggregate identifications for YOLO model
@@ -1263,7 +1258,11 @@ def main():
 
             if yolo_export:
                 id_file = os.path.join(out_base, "yolo_identifications.csv")
-                _write_csv(id_file, ['dataset', 'mass_center', 'mass_start', 'mass_end', 'identified_label'], yolo_export)
+                with open(id_file, 'w', newline='') as f:
+                    writer = csv.DictWriter(f, fieldnames=['dataset', 'mass_center', 'mass_start', 'mass_end', 'identified_label'])
+                    writer.writeheader()
+                    for row in yolo_export:
+                        writer.writerow(row)
                 print(f"Global YOLO Identifications saved to {id_file}")
 
             # Generate summary plots (into the run output directory)

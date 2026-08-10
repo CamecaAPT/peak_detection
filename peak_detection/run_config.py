@@ -75,7 +75,7 @@ SHARED_PARAMS: list[Param] = [
 
     # --- RF parameters ---
     Param("training_path", str,
-          "peak_detection/Ionclassifier/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001"),
+          "peak_detection/IonIdentificationModels/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001"),
     Param("training_num_files", int, 10000,
           "Number of synthetic training CSV files to scan (default loads all 10k when present)"),
     Param("augment_molecule_training_charge_ratios", None, False,

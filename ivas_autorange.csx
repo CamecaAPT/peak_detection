@@ -63,7 +63,7 @@ class RangingSettings
 	public bool ContextRescore { get; set; } = true;
 
 	[Category("Model"), DisplayName("YOLO weights"),
-	 Description("Weights filename in peak_detection/RangingNN/modelweights.  (--yolo-weights)")]
+	 Description("Weights filename in peak_detection/RangingModels/RangingNN/modelweights.  (--yolo-weights)")]
 	public string YoloWeights { get; set; } = "best_v0_2026-06-23.pt";
 
 	[Category("Model"), DisplayName("YOLO iterations"),
@@ -81,7 +81,7 @@ class RangingSettings
 	[Category("Model"), DisplayName("Training path"),
 	 Description("Classifier training-data directory, relative to the project root.  (--training-path)")]
 	public string TrainingPath { get; set; } =
-		"peak_detection/Ionclassifier/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001";
+		"peak_detection/IonIdentificationModels/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001";
 
 	[Category("Output"), DisplayName("Progress update fraction"),
 	 Description("Throttle training-data progress bars to ~one update per this fraction of progress " +

@@ -18,7 +18,7 @@ from .training import (
     load_ion_training_data_mc_vector as _load_ion_training_data_mc_vector,
     build_empirical_mc_samples,
 )
-from .rf_model import (
+from .IonIdentificationModels.RF.rf_model import (
     create_RF_model as _create_RF_model,
     run_RF_model as _run_RF_model,
 )
@@ -172,11 +172,11 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
     _STEP_TIMINGS.clear()
 
     import yaml
-    from peak_detection.RangingNN.predictor import DetectionPredictor
+    from peak_detection.RangingModels.RangingNN.predictor import DetectionPredictor
 
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    modelpath = os.path.join(base_dir, 'peak_detection', 'RangingNN', 'modelweights', yolo_weights)
-    cfg_path = os.path.join(base_dir, 'peak_detection', 'RangingNN', 'cfg', 'prediction_args.yaml')
+    modelpath = os.path.join(base_dir, 'peak_detection', 'RangingModels', 'RangingNN', 'modelweights', yolo_weights)
+    cfg_path = os.path.join(base_dir, 'peak_detection', 'RangingModels', 'RangingNN', 'cfg', 'prediction_args.yaml')
 
     if not os.path.exists(modelpath) or not os.path.exists(cfg_path):
         print(f"  [Error] YOLO model files not found at {modelpath}")
@@ -372,7 +372,7 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
     else:
         print(f"Target classes for model ({len(truth_species_primary)}): {_format_class_list(truth_species_primary)}")
 
-    training_data_path = training_path if training_path else os.path.join(base_dir, 'peak_detection', 'Ionclassifier', 'training_data', 'NewData', 'Data0001')
+    training_data_path = training_path if training_path else os.path.join(base_dir, 'peak_detection', 'IonIdentificationModels', 'training_data', 'NewData', 'Data0001')
     eff_neighbor_threshold = neighbor_threshold if use_neighborhood else 0.0
 
     try:

@@ -5,7 +5,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from .utils import simplify_label, is_molecule
-from .rf_model import get_signature_features
+from .IonIdentificationModels.RF.rf_model import get_signature_features
 
 
 # --- Optional progress throttling ------------------------------------------------
@@ -44,7 +44,7 @@ def _tqdm(iterable, **kwargs):
     return tqdm(iterable, **kwargs)
 
 
-def load_ion_training_data(path='peak_detection/Ionclassifier/training_data/NewData/Data0001',
+def load_ion_training_data(path='peak_detection/IonIdentificationModels/training_data/NewData/Data0001',
                            element_list=list(),
                            elements_to_get_molecules=list(),
                            threshold_c=1e-8,
@@ -295,7 +295,7 @@ def build_empirical_mc_samples(path, num_files=10000):
 
 
 def load_ion_training_data_mc_vector(
-    path: str = 'peak_detection/Ionclassifier/training_data/NewData/Data0001',
+    path: str = 'peak_detection/IonIdentificationModels/training_data/NewData/Data0001',
     element_list=list(),
     elements_to_get_molecules=list(),
     threshold_c: float = 1e-8,
