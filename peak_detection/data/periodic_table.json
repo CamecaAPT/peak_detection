@@ -1,0 +1,2260 @@
+{
+  "Ac": {
+    "atomic_number": 89,
+    "average_mass": 227.02775,
+    "isotopes": {
+      "227": {
+        "abundance": 1.0,
+        "mass": 227.02775
+      }
+    },
+    "monoisotopic_mass": 227.02775,
+    "most_abundant_isotope": 227,
+    "name": "Actinium",
+    "symbol": "Ac"
+  },
+  "Ag": {
+    "atomic_number": 47,
+    "average_mass": 107.868146698104,
+    "isotopes": {
+      "107": {
+        "abundance": 0.518392,
+        "mass": 106.905093
+      },
+      "109": {
+        "abundance": 0.48160800000000004,
+        "mass": 108.904756
+      }
+    },
+    "monoisotopic_mass": 106.905093,
+    "most_abundant_isotope": 107,
+    "name": "Silver",
+    "symbol": "Ag"
+  },
+  "Al": {
+    "atomic_number": 13,
+    "average_mass": 26.98153841,
+    "isotopes": {
+      "27": {
+        "abundance": 1.0,
+        "mass": 26.98153841
+      }
+    },
+    "monoisotopic_mass": 26.98153841,
+    "most_abundant_isotope": 27,
+    "name": "Aluminum",
+    "symbol": "Al"
+  },
+  "Am": {
+    "atomic_number": 95,
+    "average_mass": 243.06138,
+    "isotopes": {
+      "243": {
+        "abundance": 1.0,
+        "mass": 243.06138
+      }
+    },
+    "monoisotopic_mass": 243.06138,
+    "most_abundant_isotope": 243,
+    "name": "Americium",
+    "symbol": "Am"
+  },
+  "Ar": {
+    "atomic_number": 18,
+    "average_mass": 39.94767671856867,
+    "isotopes": {
+      "36": {
+        "abundance": 0.0033650000000000004,
+        "mass": 35.96754626
+      },
+      "38": {
+        "abundance": 0.0006320000000000001,
+        "mass": 37.9627322
+      },
+      "40": {
+        "abundance": 0.9960030000000001,
+        "mass": 39.962383124
+      }
+    },
+    "monoisotopic_mass": 39.962383124,
+    "most_abundant_isotope": 40,
+    "name": "Argon",
+    "symbol": "Ar"
+  },
+  "As": {
+    "atomic_number": 33,
+    "average_mass": 74.9215966,
+    "isotopes": {
+      "75": {
+        "abundance": 1.0,
+        "mass": 74.9215966
+      }
+    },
+    "monoisotopic_mass": 74.9215966,
+    "most_abundant_isotope": 75,
+    "name": "Arsenic",
+    "symbol": "As"
+  },
+  "At": {
+    "atomic_number": 85,
+    "average_mass": 209.0,
+    "isotopes": {
+      "209": {
+        "abundance": 1.0,
+        "mass": 209.0
+      }
+    },
+    "monoisotopic_mass": 209.0,
+    "most_abundant_isotope": 209,
+    "name": "Astatine",
+    "symbol": "At"
+  },
+  "Au": {
+    "atomic_number": 79,
+    "average_mass": 196.966551,
+    "isotopes": {
+      "197": {
+        "abundance": 1.0,
+        "mass": 196.966551
+      }
+    },
+    "monoisotopic_mass": 196.966551,
+    "most_abundant_isotope": 197,
+    "name": "Gold",
+    "symbol": "Au"
+  },
+  "B": {
+    "atomic_number": 5,
+    "average_mass": 10.811825283120001,
+    "isotopes": {
+      "10": {
+        "abundance": 0.19820000000000002,
+        "mass": 10.0129371
+      },
+      "11": {
+        "abundance": 0.8018000000000001,
+        "mass": 11.0093055
+      }
+    },
+    "monoisotopic_mass": 11.0093055,
+    "most_abundant_isotope": 11,
+    "name": "Boron",
+    "symbol": "B"
+  },
+  "Ba": {
+    "atomic_number": 56,
+    "average_mass": 137.32691069392,
+    "isotopes": {
+      "130": {
+        "abundance": 0.0010580000000000001,
+        "mass": 129.906311
+      },
+      "132": {
+        "abundance": 0.0010119999999999999,
+        "mass": 131.905056
+      },
+      "134": {
+        "abundance": 0.024169999999999997,
+        "mass": 133.904504
+      },
+      "135": {
+        "abundance": 0.06591999999999999,
+        "mass": 134.905684
+      },
+      "136": {
+        "abundance": 0.07853,
+        "mass": 135.904571
+      },
+      "137": {
+        "abundance": 0.11231999999999999,
+        "mass": 136.905822
+      },
+      "138": {
+        "abundance": 0.71699,
+        "mass": 137.905242
+      }
+    },
+    "monoisotopic_mass": 137.905242,
+    "most_abundant_isotope": 138,
+    "name": "Barium",
+    "symbol": "Ba"
+  },
+  "Be": {
+    "atomic_number": 4,
+    "average_mass": 9.0121822,
+    "isotopes": {
+      "9": {
+        "abundance": 1.0,
+        "mass": 9.0121822
+      }
+    },
+    "monoisotopic_mass": 9.0121822,
+    "most_abundant_isotope": 9,
+    "name": "Beryllium",
+    "symbol": "Be"
+  },
+  "Bi": {
+    "atomic_number": 83,
+    "average_mass": 208.980384,
+    "isotopes": {
+      "209": {
+        "abundance": 1.0,
+        "mass": 208.980384
+      }
+    },
+    "monoisotopic_mass": 208.980384,
+    "most_abundant_isotope": 209,
+    "name": "Bismuth",
+    "symbol": "Bi"
+  },
+  "Bk": {
+    "atomic_number": 97,
+    "average_mass": 247.0703,
+    "isotopes": {
+      "247": {
+        "abundance": 1.0,
+        "mass": 247.0703
+      }
+    },
+    "monoisotopic_mass": 247.0703,
+    "most_abundant_isotope": 247,
+    "name": "Berkelium",
+    "symbol": "Bk"
+  },
+  "Br": {
+    "atomic_number": 35,
+    "average_mass": 79.90360849173399,
+    "isotopes": {
+      "79": {
+        "abundance": 0.50686,
+        "mass": 78.9183379
+      },
+      "81": {
+        "abundance": 0.49314,
+        "mass": 80.916291
+      }
+    },
+    "monoisotopic_mass": 78.9183379,
+    "most_abundant_isotope": 79,
+    "name": "Bromine",
+    "symbol": "Br"
+  },
+  "C": {
+    "atomic_number": 6,
+    "average_mass": 12.011115164895365,
+    "isotopes": {
+      "12": {
+        "abundance": 0.9889220000000001,
+        "mass": 12.0
+      },
+      "13": {
+        "abundance": 0.011078,
+        "mass": 13.003354838
+      }
+    },
+    "monoisotopic_mass": 12.0,
+    "most_abundant_isotope": 12,
+    "name": "Carbon",
+    "symbol": "C"
+  },
+  "Ca": {
+    "atomic_number": 20,
+    "average_mass": 40.07802285093699,
+    "isotopes": {
+      "40": {
+        "abundance": 0.96941,
+        "mass": 39.9625912
+      },
+      "42": {
+        "abundance": 0.00647,
+        "mass": 41.9586183
+      },
+      "43": {
+        "abundance": 0.00135,
+        "mass": 42.9587668
+      },
+      "44": {
+        "abundance": 0.02086,
+        "mass": 43.9554811
+      },
+      "46": {
+        "abundance": 4e-05,
+        "mass": 45.9536927
+      },
+      "48": {
+        "abundance": 0.00187,
+        "mass": 47.952533
+      }
+    },
+    "monoisotopic_mass": 39.9625912,
+    "most_abundant_isotope": 40,
+    "name": "Calcium",
+    "symbol": "Ca"
+  },
+  "Cd": {
+    "atomic_number": 48,
+    "average_mass": 112.41155313337,
+    "isotopes": {
+      "106": {
+        "abundance": 0.0125,
+        "mass": 105.906458
+      },
+      "108": {
+        "abundance": 0.0089,
+        "mass": 107.904183
+      },
+      "110": {
+        "abundance": 0.1249,
+        "mass": 109.903006
+      },
+      "111": {
+        "abundance": 0.128,
+        "mass": 110.904182
+      },
+      "112": {
+        "abundance": 0.2413,
+        "mass": 111.9027577
+      },
+      "113": {
+        "abundance": 0.1222,
+        "mass": 112.9044014
+      },
+      "114": {
+        "abundance": 0.2873,
+        "mass": 113.9033586
+      },
+      "116": {
+        "abundance": 0.07490000000000001,
+        "mass": 115.904756
+      }
+    },
+    "monoisotopic_mass": 113.9033586,
+    "most_abundant_isotope": 114,
+    "name": "Cadmium",
+    "symbol": "Cd"
+  },
+  "Ce": {
+    "atomic_number": 58,
+    "average_mass": 140.11568255315,
+    "isotopes": {
+      "136": {
+        "abundance": 0.0018599999999999999,
+        "mass": 135.90714
+      },
+      "138": {
+        "abundance": 0.00251,
+        "mass": 137.905986
+      },
+      "140": {
+        "abundance": 0.88449,
+        "mass": 139.905435
+      },
+      "142": {
+        "abundance": 0.11114,
+        "mass": 141.909241
+      }
+    },
+    "monoisotopic_mass": 139.905435,
+    "most_abundant_isotope": 140,
+    "name": "Cerium",
+    "symbol": "Ce"
+  },
+  "Cf": {
+    "atomic_number": 98,
+    "average_mass": 251.0796,
+    "isotopes": {
+      "251": {
+        "abundance": 1.0,
+        "mass": 251.0796
+      }
+    },
+    "monoisotopic_mass": 251.0796,
+    "most_abundant_isotope": 251,
+    "name": "Californium",
+    "symbol": "Cf"
+  },
+  "Cl": {
+    "atomic_number": 17,
+    "average_mass": 35.4527179278481,
+    "isotopes": {
+      "35": {
+        "abundance": 0.75771,
+        "mass": 34.96885271
+      },
+      "37": {
+        "abundance": 0.24229,
+        "mass": 36.9659026
+      }
+    },
+    "monoisotopic_mass": 34.96885271,
+    "most_abundant_isotope": 35,
+    "name": "Chlorine",
+    "symbol": "Cl"
+  },
+  "Cm": {
+    "atomic_number": 96,
+    "average_mass": 247.07035,
+    "isotopes": {
+      "247": {
+        "abundance": 1.0,
+        "mass": 247.07035
+      }
+    },
+    "monoisotopic_mass": 247.07035,
+    "most_abundant_isotope": 247,
+    "name": "Curium",
+    "symbol": "Cm"
+  },
+  "Co": {
+    "atomic_number": 27,
+    "average_mass": 58.9331999,
+    "isotopes": {
+      "59": {
+        "abundance": 1.0,
+        "mass": 58.9331999
+      }
+    },
+    "monoisotopic_mass": 58.9331999,
+    "most_abundant_isotope": 59,
+    "name": "Cobalt",
+    "symbol": "Co"
+  },
+  "Cr": {
+    "atomic_number": 24,
+    "average_mass": 51.996123147223095,
+    "isotopes": {
+      "50": {
+        "abundance": 0.043452000000000005,
+        "mass": 49.9460495
+      },
+      "52": {
+        "abundance": 0.8378950000000001,
+        "mass": 51.9405115
+      },
+      "53": {
+        "abundance": 0.09500600000000001,
+        "mass": 52.9406534
+      },
+      "54": {
+        "abundance": 0.023647,
+        "mass": 53.9388846
+      }
+    },
+    "monoisotopic_mass": 51.9405115,
+    "most_abundant_isotope": 52,
+    "name": "Chromium",
+    "symbol": "Cr"
+  },
+  "Cs": {
+    "atomic_number": 55,
+    "average_mass": 132.905447,
+    "isotopes": {
+      "133": {
+        "abundance": 1.0,
+        "mass": 132.905447
+      }
+    },
+    "monoisotopic_mass": 132.905447,
+    "most_abundant_isotope": 133,
+    "name": "Cesium",
+    "symbol": "Cs"
+  },
+  "Cu": {
+    "atomic_number": 29,
+    "average_mass": 63.545563705006,
+    "isotopes": {
+      "63": {
+        "abundance": 0.69174,
+        "mass": 62.9296007
+      },
+      "65": {
+        "abundance": 0.30826,
+        "mass": 64.9277938
+      }
+    },
+    "monoisotopic_mass": 62.9296007,
+    "most_abundant_isotope": 63,
+    "name": "Copper",
+    "symbol": "Cu"
+  },
+  "Dy": {
+    "atomic_number": 66,
+    "average_mass": 162.49946223012,
+    "isotopes": {
+      "156": {
+        "abundance": 0.0005600000000000001,
+        "mass": 155.924278
+      },
+      "158": {
+        "abundance": 0.00095,
+        "mass": 157.924405
+      },
+      "160": {
+        "abundance": 0.02329,
+        "mass": 159.925194
+      },
+      "161": {
+        "abundance": 0.18889,
+        "mass": 160.92693
+      },
+      "162": {
+        "abundance": 0.25475000000000003,
+        "mass": 161.926795
+      },
+      "163": {
+        "abundance": 0.24896000000000001,
+        "mass": 162.928728
+      },
+      "164": {
+        "abundance": 0.2826,
+        "mass": 163.929171
+      }
+    },
+    "monoisotopic_mass": 163.929171,
+    "most_abundant_isotope": 164,
+    "name": "Dysprosium",
+    "symbol": "Dy"
+  },
+  "Er": {
+    "atomic_number": 68,
+    "average_mass": 167.25890733609998,
+    "isotopes": {
+      "162": {
+        "abundance": 0.001391,
+        "mass": 161.928775
+      },
+      "164": {
+        "abundance": 0.016006,
+        "mass": 163.929197
+      },
+      "166": {
+        "abundance": 0.335014,
+        "mass": 165.93029
+      },
+      "167": {
+        "abundance": 0.22872399999999998,
+        "mass": 166.932046
+      },
+      "168": {
+        "abundance": 0.269852,
+        "mass": 167.932368
+      },
+      "170": {
+        "abundance": 0.149013,
+        "mass": 169.935461
+      }
+    },
+    "monoisotopic_mass": 165.93029,
+    "most_abundant_isotope": 166,
+    "name": "Erbium",
+    "symbol": "Er"
+  },
+  "Es": {
+    "atomic_number": 99,
+    "average_mass": 252.083,
+    "isotopes": {
+      "252": {
+        "abundance": 1.0,
+        "mass": 252.083
+      }
+    },
+    "monoisotopic_mass": 252.083,
+    "most_abundant_isotope": 252,
+    "name": "Einsteinium",
+    "symbol": "Es"
+  },
+  "Eu": {
+    "atomic_number": 63,
+    "average_mass": 151.9643667439,
+    "isotopes": {
+      "151": {
+        "abundance": 0.4781,
+        "mass": 150.919846
+      },
+      "153": {
+        "abundance": 0.5219,
+        "mass": 152.921227
+      }
+    },
+    "monoisotopic_mass": 152.921227,
+    "most_abundant_isotope": 153,
+    "name": "Europium",
+    "symbol": "Eu"
+  },
+  "F": {
+    "atomic_number": 9,
+    "average_mass": 18.9984032,
+    "isotopes": {
+      "19": {
+        "abundance": 1.0,
+        "mass": 18.9984032
+      }
+    },
+    "monoisotopic_mass": 18.9984032,
+    "most_abundant_isotope": 19,
+    "name": "Fluorine",
+    "symbol": "F"
+  },
+  "Fe": {
+    "atomic_number": 26,
+    "average_mass": 55.8451489203642,
+    "isotopes": {
+      "54": {
+        "abundance": 0.058449999999999995,
+        "mass": 53.9396147
+      },
+      "56": {
+        "abundance": 0.91754,
+        "mass": 55.9349418
+      },
+      "57": {
+        "abundance": 0.021191,
+        "mass": 56.9353983
+      },
+      "58": {
+        "abundance": 0.002819,
+        "mass": 57.9332801
+      }
+    },
+    "monoisotopic_mass": 55.9349418,
+    "most_abundant_isotope": 56,
+    "name": "Iron",
+    "symbol": "Fe"
+  },
+  "Fm": {
+    "atomic_number": 100,
+    "average_mass": 257.0951,
+    "isotopes": {
+      "257": {
+        "abundance": 1.0,
+        "mass": 257.0951
+      }
+    },
+    "monoisotopic_mass": 257.0951,
+    "most_abundant_isotope": 257,
+    "name": "Fermium",
+    "symbol": "Fm"
+  },
+  "Fr": {
+    "atomic_number": 87,
+    "average_mass": 223.01974,
+    "isotopes": {
+      "223": {
+        "abundance": 1.0,
+        "mass": 223.01974
+      }
+    },
+    "monoisotopic_mass": 223.01974,
+    "most_abundant_isotope": 223,
+    "name": "Francium",
+    "symbol": "Fr"
+  },
+  "Ga": {
+    "atomic_number": 31,
+    "average_mass": 69.7230744627223,
+    "isotopes": {
+      "69": {
+        "abundance": 0.601079,
+        "mass": 68.925581
+      },
+      "71": {
+        "abundance": 0.39892099999999997,
+        "mass": 70.9247073
+      }
+    },
+    "monoisotopic_mass": 68.925581,
+    "most_abundant_isotope": 69,
+    "name": "Gallium",
+    "symbol": "Ga"
+  },
+  "Gd": {
+    "atomic_number": 64,
+    "average_mass": 157.252039273839,
+    "isotopes": {
+      "152": {
+        "abundance": 0.002029,
+        "mass": 151.919789
+      },
+      "154": {
+        "abundance": 0.021809,
+        "mass": 153.920862
+      },
+      "155": {
+        "abundance": 0.147998,
+        "mass": 154.922619
+      },
+      "156": {
+        "abundance": 0.204664,
+        "mass": 155.92212
+      },
+      "157": {
+        "abundance": 0.156518,
+        "mass": 156.923957
+      },
+      "158": {
+        "abundance": 0.248347,
+        "mass": 157.924101
+      },
+      "160": {
+        "abundance": 0.218635,
+        "mass": 159.927051
+      }
+    },
+    "monoisotopic_mass": 157.924101,
+    "most_abundant_isotope": 158,
+    "name": "Gadolinium",
+    "symbol": "Gd"
+  },
+  "Ge": {
+    "atomic_number": 32,
+    "average_mass": 72.64080317621901,
+    "isotopes": {
+      "70": {
+        "abundance": 0.20375,
+        "mass": 69.92425
+      },
+      "72": {
+        "abundance": 0.27311,
+        "mass": 71.9220763
+      },
+      "73": {
+        "abundance": 0.07756,
+        "mass": 72.9234595
+      },
+      "74": {
+        "abundance": 0.36729,
+        "mass": 73.9211784
+      },
+      "76": {
+        "abundance": 0.0783,
+        "mass": 75.9214029
+      }
+    },
+    "monoisotopic_mass": 73.9211784,
+    "most_abundant_isotope": 74,
+    "name": "Germanium",
+    "symbol": "Ge"
+  },
+  "H": {
+    "atomic_number": 1,
+    "average_mass": 1.007981749440422,
+    "isotopes": {
+      "1": {
+        "abundance": 0.99984426,
+        "mass": 1.0078250319
+      },
+      "2": {
+        "abundance": 0.00015574,
+        "mass": 2.0141017779
+      }
+    },
+    "monoisotopic_mass": 1.0078250319,
+    "most_abundant_isotope": 1,
+    "name": "Hydrogen",
+    "symbol": "H"
+  },
+  "He": {
+    "atomic_number": 2,
+    "average_mass": 4.002601924731198,
+    "isotopes": {
+      "3": {
+        "abundance": 1.343e-06,
+        "mass": 3.0160293094
+      },
+      "4": {
+        "abundance": 0.999998657,
+        "mass": 4.0026032497
+      }
+    },
+    "monoisotopic_mass": 4.0026032497,
+    "most_abundant_isotope": 4,
+    "name": "Helium",
+    "symbol": "He"
+  },
+  "Hf": {
+    "atomic_number": 72,
+    "average_mass": 178.4849440446239,
+    "isotopes": {
+      "174": {
+        "abundance": 0.0016200000000000001,
+        "mass": 173.940042
+      },
+      "176": {
+        "abundance": 0.052604,
+        "mass": 175.941403
+      },
+      "177": {
+        "abundance": 0.185953,
+        "mass": 176.9432204
+      },
+      "178": {
+        "abundance": 0.27281099999999997,
+        "mass": 177.9436981
+      },
+      "179": {
+        "abundance": 0.13621,
+        "mass": 178.9458154
+      },
+      "180": {
+        "abundance": 0.350802,
+        "mass": 179.9465488
+      }
+    },
+    "monoisotopic_mass": 179.9465488,
+    "most_abundant_isotope": 180,
+    "name": "Hafnium",
+    "symbol": "Hf"
+  },
+  "Hg": {
+    "atomic_number": 80,
+    "average_mass": 200.5977713466116,
+    "isotopes": {
+      "196": {
+        "abundance": 0.0015344,
+        "mass": 195.965814
+      },
+      "198": {
+        "abundance": 0.09968,
+        "mass": 197.966752
+      },
+      "199": {
+        "abundance": 0.16873000000000002,
+        "mass": 198.968262
+      },
+      "200": {
+        "abundance": 0.23096,
+        "mass": 199.968309
+      },
+      "201": {
+        "abundance": 0.13180999999999998,
+        "mass": 200.970285
+      },
+      "202": {
+        "abundance": 0.29863,
+        "mass": 201.970625
+      },
+      "204": {
+        "abundance": 0.06865,
+        "mass": 203.973475
+      }
+    },
+    "monoisotopic_mass": 201.970625,
+    "most_abundant_isotope": 202,
+    "name": "Mercury",
+    "symbol": "Hg"
+  },
+  "Ho": {
+    "atomic_number": 67,
+    "average_mass": 164.930319,
+    "isotopes": {
+      "165": {
+        "abundance": 1.0,
+        "mass": 164.930319
+      }
+    },
+    "monoisotopic_mass": 164.930319,
+    "most_abundant_isotope": 165,
+    "name": "Holmium",
+    "symbol": "Ho"
+  },
+  "I": {
+    "atomic_number": 53,
+    "average_mass": 126.904468,
+    "isotopes": {
+      "127": {
+        "abundance": 1.0,
+        "mass": 126.904468
+      }
+    },
+    "monoisotopic_mass": 126.904468,
+    "most_abundant_isotope": 127,
+    "name": "Iodine",
+    "symbol": "I"
+  },
+  "In": {
+    "atomic_number": 49,
+    "average_mass": 114.81812684704,
+    "isotopes": {
+      "113": {
+        "abundance": 0.04288,
+        "mass": 112.904062
+      },
+      "115": {
+        "abundance": 0.9571200000000001,
+        "mass": 114.903879
+      }
+    },
+    "monoisotopic_mass": 114.903879,
+    "most_abundant_isotope": 115,
+    "name": "Indium",
+    "symbol": "In"
+  },
+  "Ir": {
+    "atomic_number": 77,
+    "average_mass": 192.21661381696,
+    "isotopes": {
+      "191": {
+        "abundance": 0.37272,
+        "mass": 190.960591
+      },
+      "193": {
+        "abundance": 0.6272800000000001,
+        "mass": 192.962923
+      }
+    },
+    "monoisotopic_mass": 192.962923,
+    "most_abundant_isotope": 193,
+    "name": "Iridium",
+    "symbol": "Ir"
+  },
+  "K": {
+    "atomic_number": 19,
+    "average_mass": 39.09830224260249,
+    "isotopes": {
+      "39": {
+        "abundance": 0.9325811,
+        "mass": 38.9637069
+      },
+      "40": {
+        "abundance": 0.00011672000000000001,
+        "mass": 39.96399867
+      },
+      "41": {
+        "abundance": 0.0673022,
+        "mass": 40.96182597
+      }
+    },
+    "monoisotopic_mass": 38.9637069,
+    "most_abundant_isotope": 39,
+    "name": "Potassium",
+    "symbol": "K"
+  },
+  "Kr": {
+    "atomic_number": 36,
+    "average_mass": 83.7980844173904,
+    "isotopes": {
+      "78": {
+        "abundance": 0.0035518,
+        "mass": 77.920388
+      },
+      "80": {
+        "abundance": 0.022856,
+        "mass": 79.916379
+      },
+      "82": {
+        "abundance": 0.11593,
+        "mass": 81.913485
+      },
+      "83": {
+        "abundance": 0.11499599999999999,
+        "mass": 82.914137
+      },
+      "84": {
+        "abundance": 0.569877,
+        "mass": 83.911508
+      },
+      "86": {
+        "abundance": 0.17279,
+        "mass": 85.910615
+      }
+    },
+    "monoisotopic_mass": 83.911508,
+    "most_abundant_isotope": 84,
+    "name": "Krypton",
+    "symbol": "Kr"
+  },
+  "La": {
+    "atomic_number": 57,
+    "average_mass": 138.90544798439032,
+    "isotopes": {
+      "138": {
+        "abundance": 0.0009017,
+        "mass": 137.907108
+      },
+      "139": {
+        "abundance": 0.9990983,
+        "mass": 138.906349
+      }
+    },
+    "monoisotopic_mass": 138.906349,
+    "most_abundant_isotope": 139,
+    "name": "Lanthanum",
+    "symbol": "La"
+  },
+  "Li": {
+    "atomic_number": 3,
+    "average_mass": 6.9400471801979995,
+    "isotopes": {
+      "6": {
+        "abundance": 0.07589,
+        "mass": 6.0151223
+      },
+      "7": {
+        "abundance": 0.92411,
+        "mass": 7.0160041
+      }
+    },
+    "monoisotopic_mass": 7.0160041,
+    "most_abundant_isotope": 7,
+    "name": "Lithium",
+    "symbol": "Li"
+  },
+  "Lr": {
+    "atomic_number": 103,
+    "average_mass": 266.1198,
+    "isotopes": {
+      "266": {
+        "abundance": 1.0,
+        "mass": 266.1198
+      }
+    },
+    "monoisotopic_mass": 266.1198,
+    "most_abundant_isotope": 266,
+    "name": "Lawrencium",
+    "symbol": "Lr"
+  },
+  "Lu": {
+    "atomic_number": 71,
+    "average_mass": 174.96665767068,
+    "isotopes": {
+      "175": {
+        "abundance": 0.9741599999999999,
+        "mass": 174.9407682
+      },
+      "176": {
+        "abundance": 0.025840000000000002,
+        "mass": 175.9426827
+      }
+    },
+    "monoisotopic_mass": 174.9407682,
+    "most_abundant_isotope": 175,
+    "name": "Lutetium",
+    "symbol": "Lu"
+  },
+  "Md": {
+    "atomic_number": 101,
+    "average_mass": 258.0984,
+    "isotopes": {
+      "258": {
+        "abundance": 1.0,
+        "mass": 258.0984
+      }
+    },
+    "monoisotopic_mass": 258.0984,
+    "most_abundant_isotope": 258,
+    "name": "Mendelevium",
+    "symbol": "Md"
+  },
+  "Mg": {
+    "atomic_number": 12,
+    "average_mass": 24.304981908710403,
+    "isotopes": {
+      "24": {
+        "abundance": 0.7899200000000001,
+        "mass": 23.98504187
+      },
+      "25": {
+        "abundance": 0.10003000000000001,
+        "mass": 24.985837
+      },
+      "26": {
+        "abundance": 0.11005000000000001,
+        "mass": 25.982593
+      }
+    },
+    "monoisotopic_mass": 23.98504187,
+    "most_abundant_isotope": 24,
+    "name": "Magnesium",
+    "symbol": "Mg"
+  },
+  "Mn": {
+    "atomic_number": 25,
+    "average_mass": 54.9380493,
+    "isotopes": {
+      "55": {
+        "abundance": 1.0,
+        "mass": 54.9380493
+      }
+    },
+    "monoisotopic_mass": 54.9380493,
+    "most_abundant_isotope": 55,
+    "name": "Manganese",
+    "symbol": "Mn"
+  },
+  "Mo": {
+    "atomic_number": 42,
+    "average_mass": 95.9376686471841,
+    "isotopes": {
+      "100": {
+        "abundance": 0.09667099999999999,
+        "mass": 99.907476
+      },
+      "92": {
+        "abundance": 0.14769,
+        "mass": 91.90681
+      },
+      "94": {
+        "abundance": 0.09228,
+        "mass": 93.9050867
+      },
+      "95": {
+        "abundance": 0.159022,
+        "mass": 94.9058406
+      },
+      "96": {
+        "abundance": 0.16676,
+        "mass": 95.904678
+      },
+      "97": {
+        "abundance": 0.095618,
+        "mass": 96.9060201
+      },
+      "98": {
+        "abundance": 0.241959,
+        "mass": 97.9054069
+      }
+    },
+    "monoisotopic_mass": 97.9054069,
+    "most_abundant_isotope": 98,
+    "name": "Molybdenum",
+    "symbol": "Mo"
+  },
+  "N": {
+    "atomic_number": 7,
+    "average_mass": 14.006726146478995,
+    "isotopes": {
+      "14": {
+        "abundance": 0.996337,
+        "mass": 14.0030740074
+      },
+      "15": {
+        "abundance": 0.003663,
+        "mass": 15.000108973
+      }
+    },
+    "monoisotopic_mass": 14.0030740074,
+    "most_abundant_isotope": 14,
+    "name": "Nitrogen",
+    "symbol": "N"
+  },
+  "Na": {
+    "atomic_number": 11,
+    "average_mass": 22.98976966,
+    "isotopes": {
+      "23": {
+        "abundance": 1.0,
+        "mass": 22.98976966
+      }
+    },
+    "monoisotopic_mass": 22.98976966,
+    "most_abundant_isotope": 23,
+    "name": "Sodium",
+    "symbol": "Na"
+  },
+  "Nb": {
+    "atomic_number": 41,
+    "average_mass": 92.9063762,
+    "isotopes": {
+      "93": {
+        "abundance": 1.0,
+        "mass": 92.9063762
+      }
+    },
+    "monoisotopic_mass": 92.9063762,
+    "most_abundant_isotope": 93,
+    "name": "Niobium",
+    "symbol": "Nb"
+  },
+  "Nd": {
+    "atomic_number": 60,
+    "average_mass": 144.2393321244,
+    "isotopes": {
+      "142": {
+        "abundance": 0.2716,
+        "mass": 141.907719
+      },
+      "143": {
+        "abundance": 0.12179999999999999,
+        "mass": 142.90981
+      },
+      "144": {
+        "abundance": 0.23829999999999998,
+        "mass": 143.910083
+      },
+      "145": {
+        "abundance": 0.083,
+        "mass": 144.912569
+      },
+      "146": {
+        "abundance": 0.17170000000000002,
+        "mass": 145.913113
+      },
+      "148": {
+        "abundance": 0.0574,
+        "mass": 147.916889
+      },
+      "150": {
+        "abundance": 0.0562,
+        "mass": 149.920887
+      }
+    },
+    "monoisotopic_mass": 141.907719,
+    "most_abundant_isotope": 142,
+    "name": "Neodymium",
+    "symbol": "Nd"
+  },
+  "Ne": {
+    "atomic_number": 10,
+    "average_mass": 20.179952455040024,
+    "isotopes": {
+      "20": {
+        "abundance": 0.904838,
+        "mass": 19.992440176
+      },
+      "21": {
+        "abundance": 0.002696,
+        "mass": 20.99384674
+      },
+      "22": {
+        "abundance": 0.09246499999999999,
+        "mass": 21.9913855
+      }
+    },
+    "monoisotopic_mass": 19.992440176,
+    "most_abundant_isotope": 20,
+    "name": "Neon",
+    "symbol": "Ne"
+  },
+  "Ni": {
+    "atomic_number": 28,
+    "average_mass": 58.69335604913369,
+    "isotopes": {
+      "58": {
+        "abundance": 0.680769,
+        "mass": 57.9353477
+      },
+      "60": {
+        "abundance": 0.262231,
+        "mass": 59.9307903
+      },
+      "61": {
+        "abundance": 0.011399,
+        "mass": 60.9310601
+      },
+      "62": {
+        "abundance": 0.036345,
+        "mass": 61.9283484
+      },
+      "64": {
+        "abundance": 0.009256,
+        "mass": 63.9279692
+      }
+    },
+    "monoisotopic_mass": 57.9353477,
+    "most_abundant_isotope": 58,
+    "name": "Nickel",
+    "symbol": "Ni"
+  },
+  "No": {
+    "atomic_number": 102,
+    "average_mass": 259.101,
+    "isotopes": {
+      "259": {
+        "abundance": 1.0,
+        "mass": 259.101
+      }
+    },
+    "monoisotopic_mass": 259.101,
+    "most_abundant_isotope": 259,
+    "name": "Nobelium",
+    "symbol": "No"
+  },
+  "Np": {
+    "atomic_number": 93,
+    "average_mass": 237.04817,
+    "isotopes": {
+      "237": {
+        "abundance": 1.0,
+        "mass": 237.04817
+      }
+    },
+    "monoisotopic_mass": 237.04817,
+    "most_abundant_isotope": 237,
+    "name": "Neptunium",
+    "symbol": "Np"
+  },
+  "O": {
+    "atomic_number": 8,
+    "average_mass": 15.99930451375036,
+    "isotopes": {
+      "16": {
+        "abundance": 0.9976206000000001,
+        "mass": 15.9949146223
+      },
+      "17": {
+        "abundance": 0.00037900000000000005,
+        "mass": 16.9991315
+      },
+      "18": {
+        "abundance": 0.0020004,
+        "mass": 17.9991604
+      }
+    },
+    "monoisotopic_mass": 15.9949146223,
+    "most_abundant_isotope": 16,
+    "name": "Oxygen",
+    "symbol": "O"
+  },
+  "Os": {
+    "atomic_number": 76,
+    "average_mass": 190.2247171293522,
+    "isotopes": {
+      "184": {
+        "abundance": 0.000197,
+        "mass": 183.952491
+      },
+      "186": {
+        "abundance": 0.015859,
+        "mass": 185.953838
+      },
+      "187": {
+        "abundance": 0.019644,
+        "mass": 186.9557476
+      },
+      "188": {
+        "abundance": 0.132434,
+        "mass": 187.9558357
+      },
+      "189": {
+        "abundance": 0.161466,
+        "mass": 188.958145
+      },
+      "190": {
+        "abundance": 0.26258400000000004,
+        "mass": 189.958445
+      },
+      "192": {
+        "abundance": 0.40781500000000004,
+        "mass": 191.961479
+      }
+    },
+    "monoisotopic_mass": 191.961479,
+    "most_abundant_isotope": 192,
+    "name": "Osmium",
+    "symbol": "Os"
+  },
+  "P": {
+    "atomic_number": 15,
+    "average_mass": 30.97376149,
+    "isotopes": {
+      "31": {
+        "abundance": 1.0,
+        "mass": 30.97376149
+      }
+    },
+    "monoisotopic_mass": 30.97376149,
+    "most_abundant_isotope": 31,
+    "name": "Phosphorus",
+    "symbol": "P"
+  },
+  "Pa": {
+    "atomic_number": 91,
+    "average_mass": 231.03588,
+    "isotopes": {
+      "231": {
+        "abundance": 1.0,
+        "mass": 231.03588
+      }
+    },
+    "monoisotopic_mass": 231.03588,
+    "most_abundant_isotope": 231,
+    "name": "Protactinium Pa",
+    "symbol": "Pa"
+  },
+  "Pb": {
+    "atomic_number": 82,
+    "average_mass": 207.215188614239,
+    "isotopes": {
+      "204": {
+        "abundance": 0.014245,
+        "mass": 203.973028
+      },
+      "206": {
+        "abundance": 0.241447,
+        "mass": 205.974449
+      },
+      "207": {
+        "abundance": 0.220827,
+        "mass": 206.97588
+      },
+      "208": {
+        "abundance": 0.523481,
+        "mass": 207.976636
+      }
+    },
+    "monoisotopic_mass": 207.976636,
+    "most_abundant_isotope": 208,
+    "name": "Lead",
+    "symbol": "Pb"
+  },
+  "Pd": {
+    "atomic_number": 46,
+    "average_mass": 106.41532833870001,
+    "isotopes": {
+      "102": {
+        "abundance": 0.0102,
+        "mass": 101.905607
+      },
+      "104": {
+        "abundance": 0.1114,
+        "mass": 103.904034
+      },
+      "105": {
+        "abundance": 0.22329999999999997,
+        "mass": 104.905083
+      },
+      "106": {
+        "abundance": 0.2733,
+        "mass": 105.903484
+      },
+      "108": {
+        "abundance": 0.2646,
+        "mass": 107.903895
+      },
+      "110": {
+        "abundance": 0.11720000000000001,
+        "mass": 109.905153
+      }
+    },
+    "monoisotopic_mass": 105.903484,
+    "most_abundant_isotope": 106,
+    "name": "Palladium",
+    "symbol": "Pd"
+  },
+  "Pm": {
+    "atomic_number": 61,
+    "average_mass": 144.91275,
+    "isotopes": {
+      "147": {
+        "abundance": 1.0,
+        "mass": 144.91275
+      }
+    },
+    "monoisotopic_mass": 144.91275,
+    "most_abundant_isotope": 147,
+    "name": "Promethium",
+    "symbol": "Pm"
+  },
+  "Po": {
+    "atomic_number": 84,
+    "average_mass": 208.98243,
+    "isotopes": {
+      "208": {
+        "abundance": 1.0,
+        "mass": 208.98243
+      }
+    },
+    "monoisotopic_mass": 208.98243,
+    "most_abundant_isotope": 208,
+    "name": "Polonium",
+    "symbol": "Po"
+  },
+  "Pr": {
+    "atomic_number": 59,
+    "average_mass": 140.907648,
+    "isotopes": {
+      "141": {
+        "abundance": 1.0,
+        "mass": 140.907648
+      }
+    },
+    "monoisotopic_mass": 140.907648,
+    "most_abundant_isotope": 141,
+    "name": "Praseodymium Pr",
+    "symbol": "Pr"
+  },
+  "Pt": {
+    "atomic_number": 78,
+    "average_mass": 195.07780049905992,
+    "isotopes": {
+      "190": {
+        "abundance": 0.00013634,
+        "mass": 189.95993
+      },
+      "192": {
+        "abundance": 0.00782659,
+        "mass": 191.961035
+      },
+      "194": {
+        "abundance": 0.32966999999999996,
+        "mass": 193.962663
+      },
+      "195": {
+        "abundance": 0.33831556999999995,
+        "mass": 194.964774
+      },
+      "196": {
+        "abundance": 0.2524166,
+        "mass": 195.964934
+      },
+      "198": {
+        "abundance": 0.0716349,
+        "mass": 197.967875
+      }
+    },
+    "monoisotopic_mass": 194.964774,
+    "most_abundant_isotope": 195,
+    "name": "Platinum",
+    "symbol": "Pt"
+  },
+  "Pu": {
+    "atomic_number": 94,
+    "average_mass": 244.06429,
+    "isotopes": {
+      "244": {
+        "abundance": 1.0,
+        "mass": 244.06429
+      }
+    },
+    "monoisotopic_mass": 244.06429,
+    "most_abundant_isotope": 244,
+    "name": "Plutonium",
+    "symbol": "Pu"
+  },
+  "Ra": {
+    "atomic_number": 88,
+    "average_mass": 226.0254,
+    "isotopes": {
+      "226": {
+        "abundance": 1.0,
+        "mass": 226.0254
+      }
+    },
+    "monoisotopic_mass": 226.0254,
+    "most_abundant_isotope": 226,
+    "name": "Radium",
+    "symbol": "Ra"
+  },
+  "Rb": {
+    "atomic_number": 37,
+    "average_mass": 85.46775886331639,
+    "isotopes": {
+      "85": {
+        "abundance": 0.721654,
+        "mass": 84.9117924
+      },
+      "87": {
+        "abundance": 0.278346,
+        "mass": 86.9091858
+      }
+    },
+    "monoisotopic_mass": 84.9117924,
+    "most_abundant_isotope": 85,
+    "name": "Rubidium",
+    "symbol": "Rb"
+  },
+  "Re": {
+    "atomic_number": 75,
+    "average_mass": 186.20674503891001,
+    "isotopes": {
+      "185": {
+        "abundance": 0.37398000000000003,
+        "mass": 184.952955
+      },
+      "187": {
+        "abundance": 0.62602,
+        "mass": 186.9557505
+      }
+    },
+    "monoisotopic_mass": 186.9557505,
+    "most_abundant_isotope": 187,
+    "name": "Rhenium",
+    "symbol": "Re"
+  },
+  "Rh": {
+    "atomic_number": 45,
+    "average_mass": 102.905504,
+    "isotopes": {
+      "103": {
+        "abundance": 1.0,
+        "mass": 102.905504
+      }
+    },
+    "monoisotopic_mass": 102.905504,
+    "most_abundant_isotope": 103,
+    "name": "Rhodium",
+    "symbol": "Rh"
+  },
+  "Rn": {
+    "atomic_number": 86,
+    "average_mass": 222.01758,
+    "isotopes": {
+      "222": {
+        "abundance": 1.0,
+        "mass": 222.01758
+      }
+    },
+    "monoisotopic_mass": 222.01758,
+    "most_abundant_isotope": 222,
+    "name": "Radon",
+    "symbol": "Rn"
+  },
+  "Ru": {
+    "atomic_number": 44,
+    "average_mass": 101.0650877163712,
+    "isotopes": {
+      "100": {
+        "abundance": 0.12598499999999999,
+        "mass": 99.9042189
+      },
+      "101": {
+        "abundance": 0.17059999999999997,
+        "mass": 100.9055815
+      },
+      "102": {
+        "abundance": 0.315519,
+        "mass": 101.9043488
+      },
+      "104": {
+        "abundance": 0.18621,
+        "mass": 103.90543
+      },
+      "96": {
+        "abundance": 0.05542,
+        "mass": 95.907604
+      },
+      "98": {
+        "abundance": 0.018688,
+        "mass": 97.905287
+      },
+      "99": {
+        "abundance": 0.127579,
+        "mass": 98.9059385
+      }
+    },
+    "monoisotopic_mass": 101.9043488,
+    "most_abundant_isotope": 102,
+    "name": "Ruthenium",
+    "symbol": "Ru"
+  },
+  "S": {
+    "atomic_number": 16,
+    "average_mass": 32.06387856585854,
+    "isotopes": {
+      "32": {
+        "abundance": 0.9504074,
+        "mass": 31.97207073
+      },
+      "33": {
+        "abundance": 0.0074868999999999995,
+        "mass": 32.97145854
+      },
+      "34": {
+        "abundance": 0.0419599,
+        "mass": 33.96786687
+      },
+      "36": {
+        "abundance": 0.00014579,
+        "mass": 35.96708088
+      }
+    },
+    "monoisotopic_mass": 31.97207073,
+    "most_abundant_isotope": 32,
+    "name": "Sulfur",
+    "symbol": "S"
+  },
+  "Sb": {
+    "atomic_number": 51,
+    "average_mass": 121.759730695206,
+    "isotopes": {
+      "121": {
+        "abundance": 0.57213,
+        "mass": 120.9038222
+      },
+      "123": {
+        "abundance": 0.42787,
+        "mass": 122.904216
+      }
+    },
+    "monoisotopic_mass": 120.9038222,
+    "most_abundant_isotope": 121,
+    "name": "Antimony",
+    "symbol": "Sb"
+  },
+  "Sc": {
+    "atomic_number": 21,
+    "average_mass": 44.9559102,
+    "isotopes": {
+      "45": {
+        "abundance": 1.0,
+        "mass": 44.9559102
+      }
+    },
+    "monoisotopic_mass": 44.9559102,
+    "most_abundant_isotope": 45,
+    "name": "Scandium",
+    "symbol": "Sc"
+  },
+  "Se": {
+    "atomic_number": 34,
+    "average_mass": 78.959439007405,
+    "isotopes": {
+      "74": {
+        "abundance": 0.00889,
+        "mass": 73.9224767
+      },
+      "76": {
+        "abundance": 0.09366,
+        "mass": 75.9192143
+      },
+      "77": {
+        "abundance": 0.07635,
+        "mass": 76.9199148
+      },
+      "78": {
+        "abundance": 0.23772,
+        "mass": 77.9173097
+      },
+      "80": {
+        "abundance": 0.49607,
+        "mass": 79.9165221
+      },
+      "82": {
+        "abundance": 0.08731,
+        "mass": 81.9167003
+      }
+    },
+    "monoisotopic_mass": 79.9165221,
+    "most_abundant_isotope": 80,
+    "name": "Selenium",
+    "symbol": "Se"
+  },
+  "Si": {
+    "atomic_number": 14,
+    "average_mass": 28.08538362730701,
+    "isotopes": {
+      "28": {
+        "abundance": 0.9222968,
+        "mass": 27.97692649
+      },
+      "29": {
+        "abundance": 0.0468316,
+        "mass": 28.97649468
+      },
+      "30": {
+        "abundance": 0.0308716,
+        "mass": 29.97377018
+      }
+    },
+    "monoisotopic_mass": 27.97692649,
+    "most_abundant_isotope": 28,
+    "name": "Silicon",
+    "symbol": "Si"
+  },
+  "Sm": {
+    "atomic_number": 62,
+    "average_mass": 150.365959383729,
+    "isotopes": {
+      "144": {
+        "abundance": 0.030733999999999997,
+        "mass": 143.911996
+      },
+      "147": {
+        "abundance": 0.14993399999999998,
+        "mass": 146.914894
+      },
+      "148": {
+        "abundance": 0.112406,
+        "mass": 147.914818
+      },
+      "149": {
+        "abundance": 0.138189,
+        "mass": 148.91718
+      },
+      "150": {
+        "abundance": 0.073796,
+        "mass": 149.917272
+      },
+      "152": {
+        "abundance": 0.267421,
+        "mass": 151.919729
+      },
+      "154": {
+        "abundance": 0.22752,
+        "mass": 153.922206
+      }
+    },
+    "monoisotopic_mass": 151.919729,
+    "most_abundant_isotope": 152,
+    "name": "Samarium",
+    "symbol": "Sm"
+  },
+  "Sn": {
+    "atomic_number": 50,
+    "average_mass": 118.71259002497902,
+    "isotopes": {
+      "112": {
+        "abundance": 0.009729999999999999,
+        "mass": 111.904822
+      },
+      "114": {
+        "abundance": 0.00659,
+        "mass": 113.902783
+      },
+      "115": {
+        "abundance": 0.0033900000000000002,
+        "mass": 114.903347
+      },
+      "116": {
+        "abundance": 0.14536,
+        "mass": 115.901745
+      },
+      "117": {
+        "abundance": 0.07676,
+        "mass": 116.902955
+      },
+      "118": {
+        "abundance": 0.24223,
+        "mass": 117.901608
+      },
+      "119": {
+        "abundance": 0.08585000000000001,
+        "mass": 118.903311
+      },
+      "120": {
+        "abundance": 0.32593000000000005,
+        "mass": 119.9021985
+      },
+      "122": {
+        "abundance": 0.04629,
+        "mass": 121.9034411
+      },
+      "124": {
+        "abundance": 0.05789,
+        "mass": 123.9052745
+      }
+    },
+    "monoisotopic_mass": 119.9021985,
+    "most_abundant_isotope": 120,
+    "name": "Tin",
+    "symbol": "Sn"
+  },
+  "Sr": {
+    "atomic_number": 38,
+    "average_mass": 87.6168053897797,
+    "isotopes": {
+      "84": {
+        "abundance": 0.005574,
+        "mass": 83.913426
+      },
+      "86": {
+        "abundance": 0.098566,
+        "mass": 85.9092647
+      },
+      "87": {
+        "abundance": 0.070015,
+        "mass": 86.9088816
+      },
+      "88": {
+        "abundance": 0.825845,
+        "mass": 87.9056167
+      }
+    },
+    "monoisotopic_mass": 87.9056167,
+    "most_abundant_isotope": 88,
+    "name": "Strontium",
+    "symbol": "Sr"
+  },
+  "Ta": {
+    "atomic_number": 73,
+    "average_mass": 180.94787293481,
+    "isotopes": {
+      "180": {
+        "abundance": 0.000123,
+        "mass": 179.947466
+      },
+      "181": {
+        "abundance": 0.999877,
+        "mass": 180.947996
+      }
+    },
+    "monoisotopic_mass": 180.947996,
+    "most_abundant_isotope": 181,
+    "name": "Tantalum",
+    "symbol": "Ta"
+  },
+  "Tb": {
+    "atomic_number": 65,
+    "average_mass": 158.925343,
+    "isotopes": {
+      "159": {
+        "abundance": 1.0,
+        "mass": 158.925343
+      }
+    },
+    "monoisotopic_mass": 158.925343,
+    "most_abundant_isotope": 159,
+    "name": "Terbium",
+    "symbol": "Tb"
+  },
+  "Tc": {
+    "atomic_number": 43,
+    "average_mass": 96.90637,
+    "isotopes": {
+      "97": {
+        "abundance": 1.0,
+        "mass": 96.90637
+      }
+    },
+    "monoisotopic_mass": 96.90637,
+    "most_abundant_isotope": 97,
+    "name": "Technetium",
+    "symbol": "Tc"
+  },
+  "Te": {
+    "atomic_number": 52,
+    "average_mass": 127.585587117053,
+    "isotopes": {
+      "120": {
+        "abundance": 0.00096,
+        "mass": 119.904026
+      },
+      "122": {
+        "abundance": 0.02603,
+        "mass": 121.9030558
+      },
+      "123": {
+        "abundance": 0.00908,
+        "mass": 122.9042711
+      },
+      "124": {
+        "abundance": 0.04816,
+        "mass": 123.9028188
+      },
+      "125": {
+        "abundance": 0.07139000000000001,
+        "mass": 124.9044241
+      },
+      "126": {
+        "abundance": 0.18952000000000002,
+        "mass": 125.9033049
+      },
+      "128": {
+        "abundance": 0.31687,
+        "mass": 127.9044615
+      },
+      "130": {
+        "abundance": 0.33799,
+        "mass": 129.9062229
+      }
+    },
+    "monoisotopic_mass": 129.9062229,
+    "most_abundant_isotope": 130,
+    "name": "Tellurium",
+    "symbol": "Te"
+  },
+  "Th": {
+    "atomic_number": 90,
+    "average_mass": 232.0380495,
+    "isotopes": {
+      "232": {
+        "abundance": 1.0,
+        "mass": 232.0380495
+      }
+    },
+    "monoisotopic_mass": 232.0380495,
+    "most_abundant_isotope": 232,
+    "name": "Thorium",
+    "symbol": "Th"
+  },
+  "Ti": {
+    "atomic_number": 22,
+    "average_mass": 47.866889393587,
+    "isotopes": {
+      "46": {
+        "abundance": 0.08249000000000001,
+        "mass": 45.9526295
+      },
+      "47": {
+        "abundance": 0.07437,
+        "mass": 46.9517637
+      },
+      "48": {
+        "abundance": 0.7372,
+        "mass": 47.947947
+      },
+      "49": {
+        "abundance": 0.05409,
+        "mass": 48.9478707
+      },
+      "50": {
+        "abundance": 0.05184999999999999,
+        "mass": 49.944792
+      }
+    },
+    "monoisotopic_mass": 47.947947,
+    "most_abundant_isotope": 48,
+    "name": "Titanium",
+    "symbol": "Ti"
+  },
+  "Tl": {
+    "atomic_number": 81,
+    "average_mass": 204.38331701508,
+    "isotopes": {
+      "203": {
+        "abundance": 0.29524,
+        "mass": 202.972329
+      },
+      "205": {
+        "abundance": 0.7047599999999999,
+        "mass": 204.974412
+      }
+    },
+    "monoisotopic_mass": 204.974412,
+    "most_abundant_isotope": 205,
+    "name": "Thallium",
+    "symbol": "Tl"
+  },
+  "Tm": {
+    "atomic_number": 69,
+    "average_mass": 168.934211,
+    "isotopes": {
+      "169": {
+        "abundance": 1.0,
+        "mass": 168.934211
+      }
+    },
+    "monoisotopic_mass": 168.934211,
+    "most_abundant_isotope": 169,
+    "name": "Thulium",
+    "symbol": "Tm"
+  },
+  "U": {
+    "atomic_number": 92,
+    "average_mass": 238.02872632475024,
+    "isotopes": {
+      "234": {
+        "abundance": 5.42e-05,
+        "mass": 234.0409447
+      },
+      "235": {
+        "abundance": 0.0072,
+        "mass": 235.0439222
+      },
+      "238": {
+        "abundance": 0.992745,
+        "mass": 238.0507835
+      }
+    },
+    "monoisotopic_mass": 238.0507835,
+    "most_abundant_isotope": 238,
+    "name": "Uranium",
+    "symbol": "U"
+  },
+  "V": {
+    "atomic_number": 23,
+    "average_mass": 50.9414744884024,
+    "isotopes": {
+      "50": {
+        "abundance": 0.002497,
+        "mass": 49.9471627
+      },
+      "51": {
+        "abundance": 0.9975029999999999,
+        "mass": 50.9439635
+      }
+    },
+    "monoisotopic_mass": 50.9439635,
+    "most_abundant_isotope": 51,
+    "name": "Vanadium",
+    "symbol": "V"
+  },
+  "W": {
+    "atomic_number": 74,
+    "average_mass": 183.84169811179282,
+    "isotopes": {
+      "180": {
+        "abundance": 0.001198,
+        "mass": 179.946706
+      },
+      "182": {
+        "abundance": 0.264985,
+        "mass": 181.948205
+      },
+      "183": {
+        "abundance": 0.14313599999999999,
+        "mass": 182.9502242
+      },
+      "184": {
+        "abundance": 0.30642199999999997,
+        "mass": 183.9509323
+      },
+      "186": {
+        "abundance": 0.284259,
+        "mass": 185.954362
+      }
+    },
+    "monoisotopic_mass": 183.9509323,
+    "most_abundant_isotope": 184,
+    "name": "Tungsten",
+    "symbol": "W"
+  },
+  "Xe": {
+    "atomic_number": 54,
+    "average_mass": 131.29276121616948,
+    "isotopes": {
+      "124": {
+        "abundance": 0.000952,
+        "mass": 123.9058954
+      },
+      "126": {
+        "abundance": 0.00089,
+        "mass": 125.904268
+      },
+      "128": {
+        "abundance": 0.019101999999999997,
+        "mass": 127.9035305
+      },
+      "129": {
+        "abundance": 0.264006,
+        "mass": 128.9047799
+      },
+      "130": {
+        "abundance": 0.040709999999999996,
+        "mass": 129.9035089
+      },
+      "131": {
+        "abundance": 0.21232399999999998,
+        "mass": 130.9050828
+      },
+      "132": {
+        "abundance": 0.269086,
+        "mass": 131.9041546
+      },
+      "134": {
+        "abundance": 0.104357,
+        "mass": 133.9053945
+      },
+      "136": {
+        "abundance": 0.088573,
+        "mass": 135.90722
+      }
+    },
+    "monoisotopic_mass": 131.9041546,
+    "most_abundant_isotope": 132,
+    "name": "Xenon",
+    "symbol": "Xe"
+  },
+  "Y": {
+    "atomic_number": 39,
+    "average_mass": 88.9058485,
+    "isotopes": {
+      "89": {
+        "abundance": 1.0,
+        "mass": 88.9058485
+      }
+    },
+    "monoisotopic_mass": 88.9058485,
+    "most_abundant_isotope": 89,
+    "name": "Yttrium",
+    "symbol": "Y"
+  },
+  "Yb": {
+    "atomic_number": 70,
+    "average_mass": 173.03265405694998,
+    "isotopes": {
+      "168": {
+        "abundance": 0.00127,
+        "mass": 167.933895
+      },
+      "170": {
+        "abundance": 0.0304,
+        "mass": 169.934759
+      },
+      "171": {
+        "abundance": 0.14279999999999998,
+        "mass": 170.936323
+      },
+      "172": {
+        "abundance": 0.2183,
+        "mass": 171.936378
+      },
+      "173": {
+        "abundance": 0.1613,
+        "mass": 172.938207
+      },
+      "174": {
+        "abundance": 0.31829999999999997,
+        "mass": 173.938858
+      },
+      "176": {
+        "abundance": 0.1276,
+        "mass": 175.942569
+      }
+    },
+    "monoisotopic_mass": 173.938858,
+    "most_abundant_isotope": 174,
+    "name": "Ytterbium",
+    "symbol": "Yb"
+  },
+  "Zn": {
+    "atomic_number": 30,
+    "average_mass": 65.40873156666,
+    "isotopes": {
+      "64": {
+        "abundance": 0.48268,
+        "mass": 63.9291461
+      },
+      "66": {
+        "abundance": 0.27975,
+        "mass": 65.9260364
+      },
+      "67": {
+        "abundance": 0.04102,
+        "mass": 66.9271305
+      },
+      "68": {
+        "abundance": 0.19024000000000002,
+        "mass": 67.9248473
+      },
+      "70": {
+        "abundance": 0.00631,
+        "mass": 69.925325
+      }
+    },
+    "monoisotopic_mass": 63.9291461,
+    "most_abundant_isotope": 64,
+    "name": "Zinc",
+    "symbol": "Zn"
+  },
+  "Zr": {
+    "atomic_number": 40,
+    "average_mass": 91.223535713052,
+    "isotopes": {
+      "90": {
+        "abundance": 0.51452,
+        "mass": 89.9047022
+      },
+      "91": {
+        "abundance": 0.11223000000000001,
+        "mass": 90.9056434
+      },
+      "92": {
+        "abundance": 0.17146,
+        "mass": 91.9050386
+      },
+      "94": {
+        "abundance": 0.17379999999999998,
+        "mass": 93.9063144
+      },
+      "96": {
+        "abundance": 0.02799,
+        "mass": 95.908275
+      }
+    },
+    "monoisotopic_mass": 89.9047022,
+    "most_abundant_isotope": 90,
+    "name": "Zirconium",
+    "symbol": "Zr"
+  }
+}

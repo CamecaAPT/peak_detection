@@ -43,7 +43,6 @@ if current_dir not in sys.path:
 from peak_detection.data_io import (
     load_apt_from_file,
     parse_rrng,
-    extract_elements_from_rrng,
     save_rrng,
 )
 from peak_detection.yolo_detection import predict_peak_ranges_yolo
@@ -89,11 +88,10 @@ def _resolve_expected_species(elements=None, expected_rrng=None):
     if expected_rrng is not None:
         if not os.path.exists(expected_rrng):
             raise FileNotFoundError(f"Expected-species range file not found: {expected_rrng}")
-        truth = parse_rrng(expected_rrng)
+        truth, elements_list = parse_rrng(expected_rrng)
         species = sorted({str(t.label) for t in truth if t.label and t.label != 'Unknown'})
         if not species:
             raise ValueError(f"No usable species labels parsed from {expected_rrng}.")
-        elements_list = extract_elements_from_rrng(expected_rrng)
         return species, elements_list
 
     raise ValueError("Provide expected species via either `elements` or `expected_rrng`.")

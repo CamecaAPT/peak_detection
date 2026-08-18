@@ -27,8 +27,8 @@ if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
 from peak_detection.models import DatasetStats
-from peak_detection.data_io import load_apt_from_file, parse_rrng, extract_elements_from_rrng, save_rrng
-from peak_detection.utils import calculate_iou, calculate_metrics
+from peak_detection.data_io import load_apt_from_file, parse_rrng, save_rrng
+from peak_detection.utils import calculate_iou, calculate_iou_metrics
 from peak_detection.yolo_detection import predict_peak_ranges_yolo, identify_peaks
 from peak_detection.run_config import (
     add_shared_args,
@@ -126,7 +126,7 @@ def plot_yolo_comparison(stats, xlim=None, save_path=None, facecolor=None):
         ax.tick_params(colors=text_color)
         for spine in ax.spines.values():
             spine.set_edgecolor(text_color)
-    plt.plot(x, y_mapped, color='black', alpha=0.3, label='Mapped Spectrum (map01)')
+    plt.plot(x, y_mapped, color='black', alpha=0.3, label='Mapped Spectrum (min_max_scale)')
 
     # Plot true ranges (blue)
     for i, r in enumerate(truth):
@@ -307,12 +307,11 @@ def process_dataset(
 
     y_mapped = spectrum_log.numpy()
 
-    truth = parse_rrng(rrng_file)
+    truth, elements_for_molecules = parse_rrng(rrng_file)
 
     # Save true species and RF elements to files
     truth_species = sorted(list(set([t.label for t in truth if t.label and t.label != 'Unknown'])))
-    elements_for_molecules = extract_elements_from_rrng(rrng_file)
-
+    
     os.makedirs(output_dir, exist_ok=True)
     with open(os.path.join(output_dir, f"{prefix}_rf_elements.txt"), 'w') as f:
         f.write("--- Suggested RF Classes (Species) ---\n")
@@ -421,7 +420,7 @@ def process_dataset(
     detected1 = all_predicted
 
     # --- ACCURACY ASSESSMENT ---
-    pc, rc, f1c = calculate_metrics(truth, all_predicted)
+    pc, rc, f1c = calculate_iou_metrics(truth, all_predicted)
     print(f"  Total Combined Metrics: Precision={pc:.3f}, Recall={rc:.3f}, F1={f1c:.3f}")
 
     # Calculate final found peaks (TP)

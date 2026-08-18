@@ -12,7 +12,7 @@ from pymatgen.core import Composition
 
 from .models import DetailedId, PeakRange
 from .utils import calculate_iou, calculate_iou_1d, is_molecule, simplify_label
-from .data_io import parse_rrng, extract_elements_from_rrng
+from .data_io import parse_rrng
 from .training import (
     load_ion_training_data as _load_ion_training_data,
     load_ion_training_data_mc_vector as _load_ion_training_data_mc_vector,
@@ -289,9 +289,9 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
                 for j in current_peak_ranges:
                     start2, end2 = float(j[0]), float(j[1])
                     iou_val = calculate_iou_1d([start, end], [start2, end2])
-                    if iou_val > max_iou_val: max_iou_val = iou_val
+                    max_iou_val = max(max_iou_val, iou_val)
                     dist = multiplier * abs(start - start2)
-                    if dist < min_dist: min_dist = dist
+                    min_dist = min(min_dist, dist)
                 if max_iou_val == 0.0 and min_dist > tol:
                     current_peak_ranges.append([start, end])
                     added_this_iter += 1
@@ -306,7 +306,7 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
         formatted_results.append(PeakRange(start=s, end=e, pos=(s + e) / 2))
 
     # --- RF ELEMENT IDENTIFICATION ---
-    truth_data = parse_rrng(rrng_file) if rrng_file else []
+    truth_data, element_set = parse_rrng(rrng_file) if rrng_file else ([], [])
     if species_list is not None:
         # Caller supplied expected species directly (mix of elements and molecules);
         # bypass the RRNG for the RF class list. Molecules are used exactly as before.
@@ -326,7 +326,7 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
         # Derive base elements from supplied species, mirroring extract_elements_from_rrng.
         elements_for_molecules = sorted({sym for s in truth_species_all for sym in re.findall(r'[A-Z][a-z]?', s)})
     else:
-        elements_for_molecules = extract_elements_from_rrng(rrng_file) if rrng_file else []
+        elements_for_molecules = element_set if rrng_file else []
     prefix_internal = prefix if prefix else os.path.basename(apt_file).split('.')[0].lower()
 
     if save_args:

@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 from .models import PeakRange
-from .utils import map01, simplify_label, is_excluded_truth_label
+from .utils import min_max_scale, simplify_label
 
 try:
     import apav
@@ -45,13 +45,14 @@ def load_apt_from_file(apt_file):
 
     x, spectrum = d.mass_histogram(bin_width=0.01, lower=0, upper=307.2, multiplicity='all', norm=False)
 
-    spectrum_log = torch.tensor(map01(np.log(spectrum + 1)), dtype=torch.float32)
+    spectrum_log = torch.tensor(min_max_scale(np.log(spectrum + 1)), dtype=torch.float32)
     return x, spectrum, spectrum_log
 
 
 def parse_rrng(filepath: str) -> list[PeakRange]:
     """Parses a .RRNG file for benchmarking, including labels."""
     ranges = []
+    element_set = set()
     if not os.path.exists(filepath):
         return ranges
     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
@@ -63,35 +64,26 @@ def parse_rrng(filepath: str) -> list[PeakRange]:
             raw_label = match.group(4).strip()
             label = re.sub(r'Vol:[\d.]+', '', raw_label).strip()
             species_parts = re.findall(r'\b([A-Z][a-z]?):(\d+)\b', label)
-            if not species_parts:
-                continue
-            label = " ".join(f"{sym}:{count}" for sym, count in species_parts)
+            unknown = False
+            if not species_parts: 
+                # just because the label is not in RRNG format, we can call it unknown and retain for RangingNN evaluation
+                label_simple = 'Unknown'
+                unknown = True
+            else:
+                for sym, _ in species_parts:
+                    element_set.add(sym)
+                label = " ".join(f"{sym}:{count}" for sym, count in species_parts)
+                label_simple = simplify_label(label)
             start = float(match.group(2))
             end = float(match.group(3))
-            label_simple = simplify_label(label)
-            if is_excluded_truth_label(label_simple):
-                continue
             ranges.append(PeakRange(
                 start=start,
                 end=end,
                 pos=(start + end) / 2,
-                label=label_simple
+                label=label_simple,
+                is_unknown = unknown
             ))
-    return ranges
-
-
-def extract_elements_from_rrng(rrng_file):
-    """Extracts unique element symbols from an RRNG file."""
-    elements = set()
-    if not os.path.exists(rrng_file):
-        return list(elements)
-
-    truth = parse_rrng(rrng_file)
-    for t in truth:
-        found = re.findall(r'([A-Z][a-z]?)', t.label)
-        for f in found:
-            elements.add(f)
-    return sorted(list(elements))
+    return ranges, element_set
 
 
 def _species_to_rrng_notation(species):
@@ -119,16 +111,12 @@ def _get_primary_species(r: PeakRange) -> tuple[str, bool]:
     Returns (species_str, is_unknown).
     """
     label = r.label or 'Unknown'
+    unknown_match = re.match(r'Unknown\s*(?:\((\w+)\))?$', label)
 
     # Use is_unknown flag if available
-    if r.is_unknown:
-        unknown_match = re.match(r'Unknown\s*\((\w+)\)', label)
-        if unknown_match:
-            return unknown_match.group(1), True
-        return 'Unknown', True
-
-    if label == 'Unknown':
-        return 'Unknown', True
+    if r.is_unknown or unknown_match:
+        species = unknown_match.group(1) if unknown_match and unknown_match.group(1) else 'Unknown'
+        return species, True
 
     # Use detailed_id el1 if available (clean species name)
     if r.detailed_id is not None:

@@ -64,15 +64,11 @@ def load_ion_training_data(path='peak_detection/IonIdentificationModels/training
     if element_list != 'all':
         element_list = [simplify_label(str(e)) for e in element_list]
 
-    if not os.path.exists(path):
-        cwd = os.getcwd()
-        if 'AI_example' in cwd:
-            potential_path = os.path.join('..', path)
-            if os.path.exists(potential_path):
-                path = potential_path
-            else:
-                print(f"Warning: Training data path {path} not found.")
-                return np.array([]), np.array([])
+
+    if not os.path.exists(path) and "AI_example" in os.getcwd():
+        alt_path = os.path.join("..", path)
+        if os.path.exists(alt_path):
+            path = alt_path
 
     if not os.path.exists(path):
         print(f"Warning: Training data path {path} not found.")
@@ -213,22 +209,6 @@ def load_ion_training_data(path='peak_detection/IonIdentificationModels/training
     return all_features, all_ions
 
 
-def get_similar_elements(base_elements):
-    """Returns a set of elements that belong to the same groups as the base elements."""
-    from pymatgen.core import Element
-    similar = set()
-    for el_sym in base_elements:
-        try:
-            el = Element(el_sym)
-            group = el.group
-            for other_el in Element:
-                if other_el.group == group:
-                    similar.add(other_el.symbol)
-        except Exception:
-            pass
-    return similar
-
-
 def build_empirical_mc_distributions(path, num_files=10000):
     """Builds an empirical mapping of [label]: {mean_mc, std_mc} from synthetic data."""
     files = sorted([f for f in os.listdir(path) if f.endswith('.csv')])[:num_files]
@@ -326,13 +306,10 @@ def load_ion_training_data_mc_vector(
             potential_path = os.path.join('..', path)
             if os.path.exists(potential_path):
                 path = potential_path
-            else:
-                print(f"Warning: Training data path {path} not found.")
-                return np.array([]), np.array([])
 
-    if not os.path.exists(path):
-        print(f"Warning: Training data path {path} not found.")
-        return np.array([]), np.array([])
+        if not os.path.exists(path):
+            print(f"Warning: Training data path {path} not found.")
+            return np.array([]), np.array([])
 
     files = sorted([f for f in os.listdir(path) if f.endswith('.csv')])[:num_files]
 
