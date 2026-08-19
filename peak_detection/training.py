@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from .utils import simplify_label, is_molecule
+from .utils import simplify_label, is_molecule, min_max_scale
 from .IonIdentificationModels.RF.rf_model import get_signature_features
 
 
@@ -64,12 +64,6 @@ def load_ion_training_data(path='peak_detection/IonIdentificationModels/training
     if element_list != 'all':
         element_list = [simplify_label(str(e)) for e in element_list]
 
-
-    if not os.path.exists(path) and "AI_example" in os.getcwd():
-        alt_path = os.path.join("..", path)
-        if os.path.exists(alt_path):
-            path = alt_path
-
     if not os.path.exists(path):
         print(f"Warning: Training data path {path} not found.")
         return np.array([]), np.array([])
@@ -80,53 +74,51 @@ def load_ion_training_data(path='peak_detection/IonIdentificationModels/training
     raw_data_per_file = []
     for file in _tqdm(files, desc='Loading and parsing classifier training data'):
         df = pd.read_csv(os.path.join(path, file), keep_default_na=False)
+        if 'ion' not in df.columns or 'mc' not in df.columns or 'counts' not in df.columns:
+            continue
+        
         mc = df.get(['mc']).to_numpy().squeeze()
         counts = df.get(['counts']).to_numpy().squeeze()
 
         if counts.max() == counts.min():
             counts = np.zeros_like(counts)
         else:
-            counts = (counts - counts.min()) / (counts.max() - counts.min())
+            counts = min_max_scale(counts)
 
         indexes = counts > threshold_c
-        ions_raw = df.get(['ion']).to_numpy().squeeze()
-        ions2_raw = df.get(['ion2']).to_numpy().squeeze()
-
-        target_ions = []
-        for i1, i2 in zip(ions_raw, ions2_raw):
-            if i2 and i2 != "":
-                target_ions.append(i2)
-            else:
-                target_ions.append(i1)
-        ions = np.array(target_ions)
+        if not np.any(indexes):
+            continue
 
         mc_f = mc[indexes]
-        ions_f = ions[indexes]
+        ions_raw_f = df.get(['ion']).to_numpy().squeeze()[indexes]
+        ions2_raw_f = df.get(['ion2']).to_numpy().squeeze()[indexes]
 
-        # Filtering logic
-        inds_keep = list()
-        if element_list != 'all':
-            for i, ion in enumerate(ions_f):
-                ion_str = str(ion)
-                label_simple = simplify_label(ion_str)
-                
+        # Filtering logic - resolves ion2/ion preference and applies the element list /
+        # molecule discovery rules in a single pass over the threshold-surviving rows
+        mc_k_list = []
+        ions_k_list = []
+        for m_val, i1, i2 in zip(mc_f, ions_raw_f, ions2_raw_f):
+            ion_str = str(i2) if (i2 and i2 != "") else str(i1)
+            label_simple = simplify_label(ion_str)
+
+            if element_list == 'all':
+                keep = True
+            elif label_simple in element_list:
                 # Priority 1: RRNG / element list whitelist
-                if label_simple in element_list:
-                    inds_keep.append(i)
-                    continue
-                
+                keep = True
+            elif elements_to_get_molecules:
                 # Priority 2: Automatic discovery from base elements (if enabled)
-                if elements_to_get_molecules:
-                    atoms = re.findall(r'[A-Z][a-z]?', ion_str)
-                    if atoms and all(a in elements_to_get_molecules for a in atoms):
-                        # Is it a molecule? (Multiple symbols or count > 1)
-                        if len(atoms) > 1 or (len(atoms) == 1 and bool(re.search(r'\d', ion_str))):
-                            inds_keep.append(i)
-        else:
-            inds_keep = list(range(len(ions_f)))
+                atoms = re.findall(r'[A-Z][a-z]?', ion_str)
+                keep = bool(atoms) and all(a in elements_to_get_molecules for a in atoms) and is_molecule(label_simple)
+            else:
+                keep = False
 
-        mc_k = mc_f[inds_keep]
-        ions_k = [simplify_label(str(ion)) for ion in ions_f[inds_keep]]
+            if keep:
+                mc_k_list.append(m_val)
+                ions_k_list.append(label_simple)
+
+        mc_k = np.asarray(mc_k_list, dtype=float)
+        ions_k = ions_k_list
 
         if augment_molecule_charge_ratios:
             mc_aug: list[float] = mc_k.astype(float).tolist()
@@ -301,15 +293,8 @@ def load_ion_training_data_mc_vector(
         element_list = [simplify_label(str(e)) for e in element_list]
 
     if not os.path.exists(path):
-        cwd = os.getcwd()
-        if 'AI_example' in cwd:
-            potential_path = os.path.join('..', path)
-            if os.path.exists(potential_path):
-                path = potential_path
-
-        if not os.path.exists(path):
-            print(f"Warning: Training data path {path} not found.")
-            return np.array([]), np.array([])
+        print(f"Warning: Training data path {path} not found.")
+        return np.array([]), np.array([])
 
     files = sorted([f for f in os.listdir(path) if f.endswith('.csv')])[:num_files]
 
@@ -329,43 +314,36 @@ def load_ion_training_data_mc_vector(
         if not np.any(indexes):
             continue
 
-        ions_raw = df.get(['ion']).to_numpy().squeeze()
-        ions2_raw = df.get(['ion2']).to_numpy().squeeze() if 'ion2' in df.columns else np.array([''] * len(df))
-
-        # Choose ion2 if present, else ion
-        target_ions = []
-        for i1, i2 in zip(ions_raw, ions2_raw):
-            if i2 and i2 != "":
-                target_ions.append(i2)
-            else:
-                target_ions.append(i1)
-        ions = np.array(target_ions)
-
         mc_f = mc[indexes]
-        ions_f = ions[indexes]
+        ions_raw_f = df.get(['ion']).to_numpy().squeeze()[indexes]
+        ions2_raw_f = (df.get(['ion2']).to_numpy().squeeze() if 'ion2' in df.columns else np.array([''] * len(df)))[indexes]
 
-        # Apply filtering (mirrors load_ion_training_data() logic)
-        keep_mask = np.zeros(len(ions_f), dtype=bool)
-        if element_list == 'all':
-            keep_mask[:] = True
-        else:
-            for i, ion in enumerate(ions_f):
-                ion_str = str(ion)
-                label_simple = simplify_label(ion_str)
-                if label_simple in element_list:
-                    keep_mask[i] = True
-                    continue
-                if elements_to_get_molecules:
-                    atoms = re.findall(r'[A-Z][a-z]?', ion_str)
-                    if atoms and all(a in elements_to_get_molecules for a in atoms):
-                        if len(atoms) > 1 or (len(atoms) == 1 and bool(re.search(r'\d', ion_str))):
-                            keep_mask[i] = True
+        # Apply filtering (mirrors load_ion_training_data() logic) in a single pass
+        mc_k_list = []
+        ions_k_list = []
+        for m_val, i1, i2 in zip(mc_f, ions_raw_f, ions2_raw_f):
+            ion_str = str(i2) if (i2 and i2 != "") else str(i1)
+            label_simple = simplify_label(ion_str)
 
-        if not np.any(keep_mask):
+            if element_list == 'all':
+                keep = True
+            elif label_simple in element_list:
+                keep = True
+            elif elements_to_get_molecules:
+                atoms = re.findall(r'[A-Z][a-z]?', ion_str)
+                keep = bool(atoms) and all(a in elements_to_get_molecules for a in atoms) and is_molecule(label_simple)
+            else:
+                keep = False
+
+            if keep:
+                mc_k_list.append(m_val)
+                ions_k_list.append(label_simple)
+
+        if not mc_k_list:
             continue
 
-        mc_k = mc_f[keep_mask]
-        ions_k = [simplify_label(str(ion)) for ion in ions_f[keep_mask]]
+        mc_k = np.asarray(mc_k_list, dtype=float)
+        ions_k = ions_k_list
 
         per_species: dict[str, list[float]] = {}
         for m, lab in zip(mc_k, ions_k):
