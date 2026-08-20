@@ -229,73 +229,73 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
     multiplier = 0.01
 
     iter_min_intensity_threshold = None
-    if n_iter > 0:
-        first_pass_intensities = [
-            _range_intensity_stat(
-                sp_padded.numpy(),
-                float(r[0]),
-                float(r[1]),
-                quantile=iter_intensity_stat_quantile,
-            )
-            for r in current_peak_ranges
-        ]
-        first_pass_intensities = [v for v in first_pass_intensities if np.isfinite(v)]
-        if first_pass_intensities:
-            base_intensity = float(np.quantile(
-                np.asarray(first_pass_intensities, dtype=float),
-                min(1.0, max(0.0, float(iter_min_intensity_quantile))),
-            ))
-            iter_min_intensity_threshold = base_intensity * max(0.0, float(iter_min_intensity_fraction))
-            print(
-                "  YOLO iterative intensity threshold: "
-                f"{iter_min_intensity_threshold:.4g} "
-                f"(fraction {float(iter_min_intensity_fraction):.3g} of "
-                f"first-pass q{float(iter_min_intensity_quantile):.3g}={base_intensity:.4g}; "
-                f"range stat q{float(iter_intensity_stat_quantile):.3g})"
-            )
+    # if n_iter > 0:
+    #     first_pass_intensities = [
+    #         _range_intensity_stat(
+    #             sp_padded.numpy(),
+    #             float(r[0]),
+    #             float(r[1]),
+    #             quantile=iter_intensity_stat_quantile,
+    #         )
+    #         for r in current_peak_ranges
+    #     ]
+    #     first_pass_intensities = [v for v in first_pass_intensities if np.isfinite(v)]
+    #     if first_pass_intensities:
+    #         base_intensity = float(np.quantile(
+    #             np.asarray(first_pass_intensities, dtype=float),
+    #             min(1.0, max(0.0, float(iter_min_intensity_quantile))),
+    #         ))
+    #         iter_min_intensity_threshold = base_intensity * max(0.0, float(iter_min_intensity_fraction))
+    #         print(
+    #             "  YOLO iterative intensity threshold: "
+    #             f"{iter_min_intensity_threshold:.4g} "
+    #             f"(fraction {float(iter_min_intensity_fraction):.3g} of "
+    #             f"first-pass q{float(iter_min_intensity_quantile):.3g}={base_intensity:.4g}; "
+    #             f"range stat q{float(iter_intensity_stat_quantile):.3g})"
+    #         )
 
-        for it in range(n_iter):
-            n = sp_padded.shape[0]
-            x1 = np.arange(n) * multiplier
-            if current_peak_ranges:
-                ranges = np.asarray(current_peak_ranges, dtype=float)
-                starts, ends = ranges[:, 0] * multiplier, ranges[:, 1] * multiplier
-                in_any_range = np.logical_or.reduce(
-                    (x1[:, None] > starts[None, :]) & (x1[:, None] < ends[None, :]),
-                    axis=1,
-                )
-            else:
-                in_any_range = np.zeros_like(x1, dtype=bool)
-            spectrum_log_mod = sp_padded.clone().numpy()
-            spectrum_log_mod[np.isin(x1, x1[in_any_range]) | (x1 < mc_min) | (x1 > mc_max)] = 0.2
-            spectrum_log_mod = torch.Tensor(spectrum_log_mod)
-            predictor_mod = DetectionPredictor(modelpath, spectrum_log_mod[None, None, ...], save_dir='test_results', cfg=cfg)
-            result_mod = predictor_mod()[0]
-            peak_range_pred_mod = result_mod[:, :2].cpu()
-            tol = 0.5
-            added_this_iter = 0
-            for i in peak_range_pred_mod:
-                start, end = float(i[0]), float(i[1])
-                if iter_min_intensity_threshold is not None:
-                    candidate_intensity = _range_intensity_stat(
-                        sp_padded.numpy(),
-                        start,
-                        end,
-                        quantile=iter_intensity_stat_quantile,
-                    )
-                    if candidate_intensity < iter_min_intensity_threshold:
-                        continue
-                max_iou_val, min_dist = 0.0, 1000
-                for j in current_peak_ranges:
-                    start2, end2 = float(j[0]), float(j[1])
-                    iou_val = calculate_iou_1d([start, end], [start2, end2])
-                    max_iou_val = max(max_iou_val, iou_val)
-                    dist = multiplier * abs(start - start2)
-                    min_dist = min(min_dist, dist)
-                if max_iou_val == 0.0 and min_dist > tol:
-                    current_peak_ranges.append([start, end])
-                    added_this_iter += 1
-            print(f"  YOLO iterative pass {it + 1}/{n_iter}: added {added_this_iter} new ranges")
+    #     for it in range(n_iter):
+    #         n = sp_padded.shape[0]
+    #         x1 = np.arange(n) * multiplier
+    #         if current_peak_ranges:
+    #             ranges = np.asarray(current_peak_ranges, dtype=float)
+    #             starts, ends = ranges[:, 0] * multiplier, ranges[:, 1] * multiplier
+    #             in_any_range = np.logical_or.reduce(
+    #                 (x1[:, None] > starts[None, :]) & (x1[:, None] < ends[None, :]),
+    #                 axis=1,
+    #             )
+    #         else:
+    #             in_any_range = np.zeros_like(x1, dtype=bool)
+    #         spectrum_log_mod = sp_padded.clone().numpy()
+    #         spectrum_log_mod[np.isin(x1, x1[in_any_range]) | (x1 < mc_min) | (x1 > mc_max)] = 0.2
+    #         spectrum_log_mod = torch.Tensor(spectrum_log_mod)
+    #         predictor_mod = DetectionPredictor(modelpath, spectrum_log_mod[None, None, ...], save_dir='test_results', cfg=cfg)
+    #         result_mod = predictor_mod()[0]
+    #         peak_range_pred_mod = result_mod[:, :2].cpu()
+    #         tol = 0.5
+    #         added_this_iter = 0
+    #         for i in peak_range_pred_mod:
+    #             start, end = float(i[0]), float(i[1])
+    #             if iter_min_intensity_threshold is not None:
+    #                 candidate_intensity = _range_intensity_stat(
+    #                     sp_padded.numpy(),
+    #                     start,
+    #                     end,
+    #                     quantile=iter_intensity_stat_quantile,
+    #                 )
+    #                 if candidate_intensity < iter_min_intensity_threshold:
+    #                     continue
+    #             max_iou_val, min_dist = 0.0, 1000
+    #             for j in current_peak_ranges:
+    #                 start2, end2 = float(j[0]), float(j[1])
+    #                 iou_val = calculate_iou_1d([start, end], [start2, end2])
+    #                 max_iou_val = max(max_iou_val, iou_val)
+    #                 dist = multiplier * abs(start - start2)
+    #                 min_dist = min(min_dist, dist)
+    #             if max_iou_val == 0.0 and min_dist > tol:
+    #                 current_peak_ranges.append([start, end])
+    #                 added_this_iter += 1
+    #         print(f"  YOLO iterative pass {it + 1}/{n_iter}: added {added_this_iter} new ranges")
 
     _accumulate_time('ranging', time.perf_counter() - _t_ranging)
 
