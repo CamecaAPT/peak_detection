@@ -60,16 +60,9 @@ class Param:
 SHARED_PARAMS: list[Param] = [
     # --- YOLO parameters ---
     Param("yolo_weights", str, "best_v0_2026-06-23.pt"),
-    Param("n_iter", int, 0),
     Param("iou", float, 0.01),
     Param("conf", float, 0.05),
     Param("max_det", int, 2000),
-    Param("iter_min_intensity_quantile", float, 0.10,
-          "For YOLO iterative reruns, use this first-pass peak-intensity quantile to set the minimum intensity gate"),
-    Param("iter_min_intensity_fraction", float, 0.50,
-          "For YOLO iterative reruns, require new ranges to be at least this fraction of the first-pass intensity quantile"),
-    Param("iter_intensity_stat_quantile", float, 0.90,
-          "Within each candidate range, use this intensity quantile as the robust peak intensity statistic"),
     Param("mc_min", float, 0.0),
     Param("mc_max", float, 307.2),
 
@@ -100,10 +93,6 @@ SHARED_PARAMS: list[Param] = [
           "Train a molecule-only RF and apply it only to peaks flagged as unknown", is_bool=True),
     Param("unknown_molecule_rf_threshold", float, 0.8,
           "Min confidence for molecule-only RF to un-flag an unknown peak"),
-    Param("followon_mc_vector_rf", None, False,
-          "Run a follow-on RF using a padded vector of unique m/c values per predicted species-group", is_bool=True),
-    Param("followon_mc_vector_round_decimals", int, 3,
-          "Rounding decimals used when determining unique m/c values for the follow-on mc-vector RF"),
 
     # --- Unknown flagging ---
     Param("flag_unknowns", None, True, is_bool=True),

@@ -9,7 +9,7 @@ import numpy as np
 
 @dataclass
 class DetailedId:
-    """RF model's top-2 predictions for a peak."""
+    """An identification model's top-2 candidate labels for a peak."""
     el1: str = ''
     conf1: float = 0.0
     el2: str = ''
@@ -44,33 +44,33 @@ class DatasetStats:
     true_max_mc: float = 0.0
     pred_min_mc: float = 0.0
     pred_max_mc: float = 0.0
-    rf_accuracy: float = 0.0
-    rf_accuracy_ele: float = 0.0
-    rf_species_total: int = 0
-    rf_species_correct: int = 0
-    rf_elemental_total: int = 0
-    rf_elemental_correct: int = 0
-    rf_molecular_total: int = 0
-    rf_molecular_correct: int = 0
-    rf_species_total_exc: int = 0
-    rf_species_correct_exc: int = 0
-    rf_elemental_total_exc: int = 0
-    rf_elemental_correct_exc: int = 0
-    rf_molecular_total_exc: int = 0
-    rf_molecular_correct_exc: int = 0
+    species_accuracy: float = 0.0
+    elemental_accuracy: float = 0.0
+    species_total: int = 0
+    species_correct: int = 0
+    elemental_total: int = 0
+    elemental_correct: int = 0
+    molecular_total: int = 0
+    molecular_correct: int = 0
+    species_total_exc: int = 0
+    species_correct_exc: int = 0
+    elemental_total_exc: int = 0
+    elemental_correct_exc: int = 0
+    molecular_total_exc: int = 0
+    molecular_correct_exc: int = 0
     # Optional: metrics before molecule-rescue overrides are applied
-    rf_species_total_before: int = 0
-    rf_species_correct_before: int = 0
-    rf_elemental_total_before: int = 0
-    rf_elemental_correct_before: int = 0
-    rf_molecular_total_before: int = 0
-    rf_molecular_correct_before: int = 0
-    rf_species_total_before_exc: int = 0
-    rf_species_correct_before_exc: int = 0
-    rf_elemental_total_before_exc: int = 0
-    rf_elemental_correct_before_exc: int = 0
-    rf_molecular_total_before_exc: int = 0
-    rf_molecular_correct_before_exc: int = 0
+    species_total_before: int = 0
+    species_correct_before: int = 0
+    elemental_total_before: int = 0
+    elemental_correct_before: int = 0
+    molecular_total_before: int = 0
+    molecular_correct_before: int = 0
+    species_total_before_exc: int = 0
+    species_correct_before_exc: int = 0
+    elemental_total_before_exc: int = 0
+    elemental_correct_before_exc: int = 0
+    molecular_total_before_exc: int = 0
+    molecular_correct_before_exc: int = 0
     molecule_rescue_considered: int = 0
     molecule_rescue_overrides: int = 0
     molecule_rescue_mixed_candidates: int = 0

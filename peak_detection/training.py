@@ -123,19 +123,6 @@ def _augment_molecule_charge_ratios_flat(mc_k, ions_k, molecule_charge_ratios):
     return np.asarray(mc_aug, dtype=float), ions_aug
 
 
-def _augment_molecule_charge_ratios_grouped(per_species, molecule_charge_ratios):
-    """Per-species dict variant of charge-ratio augmentation, used by the mc-vector loader."""
-    valid_ratios = [r for r in molecule_charge_ratios if r > 0]
-
-    for lab, mcs in per_species.items():
-        if not is_molecule(lab):
-            continue
-        new_values = [mc_val * ratio for mc_val in mcs for ratio in valid_ratios]
-        mcs.extend(new_values)
-
-    return per_species
-
-
 def load_ion_training_data(path='peak_detection/IonIdentificationModels/training_data/NewData/Data0001',
                            element_list=list(),
                            elements_to_get_molecules=list(),
@@ -241,80 +228,6 @@ def load_ion_training_data(path='peak_detection/IonIdentificationModels/training
           f"(Neighborhood: {max_neigh}, Signature: {10 if use_signature else 0})")
     return all_features, all_ions
 
-
-def load_ion_training_data_mc_vector(
-    path: str = 'peak_detection/IonIdentificationModels/training_data/NewData/Data0001',
-    element_list=list(),
-    elements_to_get_molecules=list(),
-    threshold_c: float = 1e-8,
-    num_files: int = 10000,
-    mc_round_decimals: int = 3,
-    augment_molecule_charge_ratios: bool = False,
-    molecule_charge_ratios: tuple[float, ...] = (0.5, 1.0 / 3.0),
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Build training samples where each sample corresponds to a (file, species) pair, and the
-    features are the sorted unique m/c values observed for that species within the file.
-    """
-    features_all: list[list[float]] = []
-    ions_all: list[str] = []
-
-    if element_list != 'all':
-        element_list = [simplify_label(str(e)) for e in element_list]
-
-    if not os.path.exists(path):
-        print(f"Warning: Training data path {path} not found.")
-        return np.array([]), np.array([])
-
-    files = sorted([f for f in os.listdir(path) if f.endswith('.csv')])[:num_files]
-
-    # First pass: collect all per-(file, species) mc lists and determine max vector length
-    grouped_samples: list[tuple[list[float], str]] = []
-    max_len = 0
-
-    for file in _tqdm(files, desc='Loading and grouping training data (mc-vector)'):
-        parsed = _load_and_filter_file(os.path.join(path, file), element_list,
-                                        elements_to_get_molecules, threshold_c)
-        if parsed is None:
-            continue
-
-        mc_k, ions_k = parsed['mc_k'], parsed['ions_k']
-        if len(mc_k) == 0:
-            continue
-
-        per_species: dict[str, list[float]] = {}
-        for m, lab in zip(mc_k, ions_k):
-            if not lab or lab == 'Unknown':
-                continue
-            per_species.setdefault(lab, []).append(float(m))
-
-        if augment_molecule_charge_ratios and molecule_charge_ratios:
-            per_species = _augment_molecule_charge_ratios_grouped(per_species, molecule_charge_ratios)
-
-        for lab, mcs in per_species.items():
-            if not mcs:
-                continue
-            uniq = np.unique(np.round(np.asarray(mcs, dtype=float), mc_round_decimals))
-            uniq_sorted = sorted(float(x) for x in uniq.tolist())
-            if not uniq_sorted:
-                continue
-            grouped_samples.append((uniq_sorted, lab))
-            if len(uniq_sorted) > max_len:
-                max_len = len(uniq_sorted)
-
-    if not grouped_samples or max_len == 0:
-        return np.array([]), np.array([])
-
-    # Second pass: pad vectors
-    for uniq_sorted, lab in grouped_samples:
-        vec = uniq_sorted + [0.0] * (max_len - len(uniq_sorted))
-        features_all.append(vec)
-        ions_all.append(lab)
-
-    all_features = np.asarray(features_all, dtype=float)
-    all_ions = np.asarray(ions_all, dtype=str)
-    print(f"Loaded mc-vector training data with feature vector length: {all_features.shape[1]}")
-    return all_features, all_ions
 
 # MIGHT NEED TO CHANGE TO NOT SKIP ROWS WITH UNKNOWN LABELS
 def _file_mc_labels(filepath):

@@ -11,11 +11,10 @@ import torch
 from pymatgen.core import Composition
 
 from .models import DetailedId, PeakRange
-from .utils import calculate_iou, calculate_iou_1d, is_molecule, simplify_label
+from .utils import calculate_iou, is_molecule, simplify_label
 from .data_io import parse_rrng
 from .training import (
     load_ion_training_data as _load_ion_training_data,
-    load_ion_training_data_mc_vector as _load_ion_training_data_mc_vector,
     build_empirical_mc_samples,
 )
 from .IonIdentificationModels.RF.rf_model import (
@@ -38,14 +37,6 @@ def load_ion_training_data(*args, **kwargs):
     t0 = time.perf_counter()
     try:
         return _load_ion_training_data(*args, **kwargs)
-    finally:
-        _accumulate_time('rf_train', time.perf_counter() - t0)
-
-
-def load_ion_training_data_mc_vector(*args, **kwargs):
-    t0 = time.perf_counter()
-    try:
-        return _load_ion_training_data_mc_vector(*args, **kwargs)
     finally:
         _accumulate_time('rf_train', time.perf_counter() - t0)
 
@@ -92,20 +83,6 @@ def remove_peaks_and_patch(spectrum: np.ndarray, detected_ranges: list[PeakRange
     return new_spectrum
 
 
-def _range_intensity_stat(spectrum: np.ndarray, start_idx: float, end_idx: float, *, quantile: float = 0.9) -> float:
-    """Robust peak-intensity statistic for a YOLO range in index units."""
-    n = len(spectrum)
-    lo = max(0, int(np.floor(float(start_idx))))
-    hi = min(n, int(np.ceil(float(end_idx))) + 1)
-    if hi <= lo:
-        return 0.0
-    vals = np.asarray(spectrum[lo:hi], dtype=float)
-    if vals.size == 0:
-        return 0.0
-    q = min(1.0, max(0.0, float(quantile)))
-    return float(np.quantile(vals, q))
-
-
 def identify_peaks(detected_ranges: list[PeakRange], x: np.ndarray, spectrum_log, allowed_elements: list[str] | None = None, flag_unknowns: bool = True) -> list[PeakRange]:
     """
     Assigns chemical labels to detected ranges. (Simplified wrapper)
@@ -114,7 +91,7 @@ def identify_peaks(detected_ranges: list[PeakRange], x: np.ndarray, spectrum_log
 
 
 def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
-                             n_iter=0, prefix=None, flag_unknowns=False,
+                             prefix=None, flag_unknowns=False,
                              mc_threshold=0.2, training_path=None,
                              training_num_files: int = 10000,
                              augment_molecule_training_charge_ratios: bool = False,
@@ -126,13 +103,9 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
                              unknown_mixed_element_molecule_confidence_threshold: float = 0.95,
                              include_molecules=False, yolo_weights='best.pt',
                              iou=0.01, conf=0.05, max_det=2000,
-                             iter_min_intensity_quantile: float = 0.10,
-                             iter_min_intensity_fraction: float = 0.50,
-                             iter_intensity_stat_quantile: float = 0.90,
                              mc_min=0.0, mc_max=307.2,
                              use_neighborhood=False, neighbor_threshold=2.0,
                              use_signature=False,
-                             separate_molecule_rf=False,
                              unknown_molecule_rf: bool = False,
                              molecule_rf_threshold=0.8,
                              unknown_confidence_threshold: float = 0.6,
@@ -146,8 +119,6 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
                              context_distance_sigma: float = 0.75,
                              context_rescue_unknown_same_label: bool = True,
                              context_rescue_unknown_min_score: float = 0.7,
-                             followon_mc_vector_rf: bool = False,
-                             followon_mc_vector_round_decimals: int = 3,
                              species_list: list | None = None,
                              elements_list: list | None = None,
                              save_artifacts: bool = True,
@@ -223,79 +194,8 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
     result = predictor()[0]
     peak_range_pred = result[:, :2].cpu()
 
-    # Recursive iteration. Each pass suppresses every peak found so far, then
-    # adds only non-overlapping new ranges to the aggregate list.
     current_peak_ranges = [list(map(float, r)) for r in peak_range_pred.tolist()]
     multiplier = 0.01
-
-    iter_min_intensity_threshold = None
-    # if n_iter > 0:
-    #     first_pass_intensities = [
-    #         _range_intensity_stat(
-    #             sp_padded.numpy(),
-    #             float(r[0]),
-    #             float(r[1]),
-    #             quantile=iter_intensity_stat_quantile,
-    #         )
-    #         for r in current_peak_ranges
-    #     ]
-    #     first_pass_intensities = [v for v in first_pass_intensities if np.isfinite(v)]
-    #     if first_pass_intensities:
-    #         base_intensity = float(np.quantile(
-    #             np.asarray(first_pass_intensities, dtype=float),
-    #             min(1.0, max(0.0, float(iter_min_intensity_quantile))),
-    #         ))
-    #         iter_min_intensity_threshold = base_intensity * max(0.0, float(iter_min_intensity_fraction))
-    #         print(
-    #             "  YOLO iterative intensity threshold: "
-    #             f"{iter_min_intensity_threshold:.4g} "
-    #             f"(fraction {float(iter_min_intensity_fraction):.3g} of "
-    #             f"first-pass q{float(iter_min_intensity_quantile):.3g}={base_intensity:.4g}; "
-    #             f"range stat q{float(iter_intensity_stat_quantile):.3g})"
-    #         )
-
-    #     for it in range(n_iter):
-    #         n = sp_padded.shape[0]
-    #         x1 = np.arange(n) * multiplier
-    #         if current_peak_ranges:
-    #             ranges = np.asarray(current_peak_ranges, dtype=float)
-    #             starts, ends = ranges[:, 0] * multiplier, ranges[:, 1] * multiplier
-    #             in_any_range = np.logical_or.reduce(
-    #                 (x1[:, None] > starts[None, :]) & (x1[:, None] < ends[None, :]),
-    #                 axis=1,
-    #             )
-    #         else:
-    #             in_any_range = np.zeros_like(x1, dtype=bool)
-    #         spectrum_log_mod = sp_padded.clone().numpy()
-    #         spectrum_log_mod[np.isin(x1, x1[in_any_range]) | (x1 < mc_min) | (x1 > mc_max)] = 0.2
-    #         spectrum_log_mod = torch.Tensor(spectrum_log_mod)
-    #         predictor_mod = DetectionPredictor(modelpath, spectrum_log_mod[None, None, ...], save_dir='test_results', cfg=cfg)
-    #         result_mod = predictor_mod()[0]
-    #         peak_range_pred_mod = result_mod[:, :2].cpu()
-    #         tol = 0.5
-    #         added_this_iter = 0
-    #         for i in peak_range_pred_mod:
-    #             start, end = float(i[0]), float(i[1])
-    #             if iter_min_intensity_threshold is not None:
-    #                 candidate_intensity = _range_intensity_stat(
-    #                     sp_padded.numpy(),
-    #                     start,
-    #                     end,
-    #                     quantile=iter_intensity_stat_quantile,
-    #                 )
-    #                 if candidate_intensity < iter_min_intensity_threshold:
-    #                     continue
-    #             max_iou_val, min_dist = 0.0, 1000
-    #             for j in current_peak_ranges:
-    #                 start2, end2 = float(j[0]), float(j[1])
-    #                 iou_val = calculate_iou_1d([start, end], [start2, end2])
-    #                 max_iou_val = max(max_iou_val, iou_val)
-    #                 dist = multiplier * abs(start - start2)
-    #                 min_dist = min(min_dist, dist)
-    #             if max_iou_val == 0.0 and min_dist > tol:
-    #                 current_peak_ranges.append([start, end])
-    #                 added_this_iter += 1
-    #         print(f"  YOLO iterative pass {it + 1}/{n_iter}: added {added_this_iter} new ranges")
 
     _accumulate_time('ranging', time.perf_counter() - _t_ranging)
 
@@ -366,11 +266,7 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
         return f"{head}, ... (+{len(classes) - max_items} more)"
 
     print(f"Training RF model on base elements: {elements_for_molecules}")
-    if separate_molecule_rf:
-        print(f"Element RF target classes ({len([s for s in truth_species_primary if not is_molecule(s)])}): {_format_class_list([s for s in truth_species_primary if not is_molecule(s)])}")
-        print(f"Molecule RF target classes ({len(truth_molecules)}): {_format_class_list(truth_molecules)}")
-    else:
-        print(f"Target classes for model ({len(truth_species_primary)}): {_format_class_list(truth_species_primary)}")
+    print(f"Target classes for model ({len(truth_species_primary)}): {_format_class_list(truth_species_primary)}")
 
     training_data_path = training_path if training_path else os.path.join(base_dir, 'peak_detection', 'IonIdentificationModels', 'training_data', 'NewData', 'Data0001')
     eff_neighbor_threshold = neighbor_threshold if use_neighborhood else 0.0
@@ -380,56 +276,23 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
         after_rescue_breakdown = None
         rescue_stats = {'considered': 0, 'overrides': 0}
 
-        raw_elements_ele, rf_confs_ele, detailed_rf_ele = [], [], []
-        raw_elements_mol, rf_confs_mol, detailed_rf_mol = [], [], []
         peak_mcs = np.array([])
-        
-        if not separate_molecule_rf:
-            X_train, ions_train = load_ion_training_data(
-                path=training_data_path, element_list=truth_species_primary,
-                elements_to_get_molecules=elements_for_molecules if include_molecules else [],
-                num_files=int(training_num_files),
-                neighbor_threshold=eff_neighbor_threshold,
-                use_signature=use_signature,
-                augment_molecule_charge_ratios=bool(augment_molecule_training_charge_ratios),
+        raw_elements_initial, rf_confs_initial, detailed_rf_initial = [], [], []
+
+        X_train, ions_train = load_ion_training_data(
+            path=training_data_path, element_list=truth_species_primary,
+            elements_to_get_molecules=elements_for_molecules if include_molecules else [],
+            num_files=int(training_num_files),
+            neighbor_threshold=eff_neighbor_threshold,
+            use_signature=use_signature,
+            augment_molecule_charge_ratios=bool(augment_molecule_training_charge_ratios),
+        )
+        if len(X_train) > 0:
+            scaler_rf, model_rf, target_decoder_rf = create_RF_model(X_train, ions_train)
+            raw_elements_initial, rf_confs_initial, detailed_rf_initial, peak_mcs = run_RF_model(
+                formatted_results, x_exp, spectrum_log, scaler_rf, model_rf, target_decoder_rf,
+                neighbor_threshold=eff_neighbor_threshold, use_signature=use_signature
             )
-            if len(X_train) > 0:
-                scaler_rf, model_rf, target_decoder_rf = create_RF_model(X_train, ions_train)
-                raw_elements_initial, rf_confs_initial, detailed_rf_initial, peak_mcs = run_RF_model(
-                    formatted_results, x_exp, spectrum_log, scaler_rf, model_rf, target_decoder_rf,
-                    neighbor_threshold=eff_neighbor_threshold, use_signature=use_signature
-                )
-        else:
-            truth_elements = [s for s in truth_species_primary if not is_molecule(s)]
-            if include_molecules or truth_molecules:
-                X_train_mol, ions_train_mol = load_ion_training_data(
-                    path=training_data_path, element_list=truth_molecules,
-                    elements_to_get_molecules=elements_for_molecules if include_molecules else [],
-                    num_files=int(training_num_files),
-                    neighbor_threshold=eff_neighbor_threshold,
-                    use_signature=use_signature,
-                    augment_molecule_charge_ratios=bool(augment_molecule_training_charge_ratios),
-                )
-                if len(X_train_mol) > 0:
-                    scaler_rf_mol, model_rf_mol, target_decoder_rf_mol = create_RF_model(X_train_mol, ions_train_mol)
-                    raw_elements_mol, rf_confs_mol, detailed_rf_mol, _ = run_RF_model(
-                        formatted_results, x_exp, spectrum_log, scaler_rf_mol, model_rf_mol, target_decoder_rf_mol,
-                        neighbor_threshold=eff_neighbor_threshold, use_signature=use_signature
-                    )
-            if truth_elements:
-                X_train_ele, ions_train_ele = load_ion_training_data(
-                    path=training_data_path, element_list=truth_elements,
-                    elements_to_get_molecules=[], num_files=int(training_num_files),
-                    neighbor_threshold=eff_neighbor_threshold,
-                    use_signature=use_signature,
-                    augment_molecule_charge_ratios=bool(augment_molecule_training_charge_ratios),
-                )
-                if len(X_train_ele) > 0:
-                    scaler_rf_ele, model_rf_ele, target_decoder_rf_ele = create_RF_model(X_train_ele, ions_train_ele)
-                    raw_elements_ele, rf_confs_ele, detailed_rf_ele, peak_mcs = run_RF_model(
-                        formatted_results, x_exp, spectrum_log, scaler_rf_ele, model_rf_ele, target_decoder_rf_ele,
-                        neighbor_threshold=eff_neighbor_threshold, use_signature=use_signature
-                    )
 
         def _min_abs_distance_to_samples(sorted_samples: np.ndarray | None, value: float) -> float:
             if sorted_samples is None or len(sorted_samples) == 0:
@@ -583,36 +446,14 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
         print("  Building mc-distance lookup table...")
         mc_samples_by_species = build_empirical_mc_samples(path=training_data_path, num_files=int(training_num_files))
 
-        # 3. Refined Winner Selection (KDE REMOVED)
+        # 3. Refined Winner Selection
         for i in range(len(formatted_results)):
             mc_val = peak_mcs[i]
-            alt_candidates = []
-            if separate_molecule_rf:
-                if rf_confs_ele:
-                    alt_candidates.append(
-                        {'el': raw_elements_ele[i], 'conf': rf_confs_ele[i], 'det': detailed_rf_ele[i], 'model': 'ele'}
-                    )
-                if rf_confs_mol:
-                    alt_candidates.append(
-                        {'el': raw_elements_mol[i], 'conf': rf_confs_mol[i], 'det': detailed_rf_mol[i], 'model': 'mol'}
-                    )
-            else:
-                alt_candidates.append({'el': raw_elements_initial[i], 'conf': rf_confs_initial[i], 'det': detailed_rf_initial[i], 'model': 'joint'})
-
-            best_score, best_candidate = -1.0, (alt_candidates[0] if alt_candidates else {'el': 'Unknown', 'conf': 0.0, 'det': DetailedId(el1='Unknown'), 'model': 'none'})
-
-            for cand in alt_candidates:
-                full_label = cand['el']
-                main_label = re.split(r'\(|\s', full_label)[0].strip()
-                dist_weight = 1.0
-                species_key = simplify_label(main_label)
-                dist_val = _min_abs_distance_to_species_samples(species_key, float(mc_val))
-                if dist_val > mc_threshold:
-                    if flag_unknowns or dist_val > (mc_threshold * 10):
-                        dist_weight = 0.05 if dist_val > (mc_threshold * 1.5) else 0.5
-                if cand['model'] == 'mol' and dist_weight >= 0.5: dist_weight *= 1.2
-                cand_score = cand['conf'] * dist_weight
-                if cand_score > best_score: best_score, best_candidate = cand_score, cand
+            best_candidate = {
+                'el': raw_elements_initial[i],
+                'conf': rf_confs_initial[i],
+                'det': detailed_rf_initial[i],
+            }
 
             # STRICT MC-DISTANCE FLAGGING
             p = formatted_results[i]
@@ -655,12 +496,7 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
             else:
                 p.label = winner_full
                 p.id_score, p.is_unknown = float(best_candidate['conf']), False
-                if best_candidate.get('model') == 'mol':
-                    p.method = 'RF-mol'
-                elif best_candidate.get('model') == 'ele':
-                    p.method = 'RF-ele'
-                else:
-                    p.method = 'RF'
+                p.method = 'RF'
                 p.detailed_id = best_candidate['det']
 
         # 4. Optional: second-pass molecule-only RF on unknown peaks
@@ -728,97 +564,7 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
                 if recovered:
                     print(f"  Molecule RF recovered {recovered}/{len(unknown_indices)} unknown peaks.")
 
-        # 5. Optional: follow-on RF using mc-vector features per predicted species group
-        if followon_mc_vector_rf:
-            try:
-                X_train_vec, ions_train_vec = load_ion_training_data_mc_vector(
-                    path=training_data_path,
-                    element_list=truth_species_primary,
-                    elements_to_get_molecules=elements_for_molecules if include_molecules else [],
-                    num_files=int(training_num_files),
-                    mc_round_decimals=int(followon_mc_vector_round_decimals),
-                    augment_molecule_charge_ratios=bool(augment_molecule_training_charge_ratios),
-                )
-                if len(X_train_vec) == 0:
-                    print("  [Warn] Follow-on mc-vector RF: no training data; skipping.")
-                else:
-                    scaler_vec, model_vec, target_decoder_vec = create_RF_model(X_train_vec, ions_train_vec)
-                    vec_len = int(model_vec.n_features_in_)
-                    print(f"  Follow-on mc-vector RF enabled (vector length {vec_len}).")
-
-                    # Build per-(predicted label) groups of detected m/c values using initial RF peak m/cs.
-                    group_to_indices: dict[str, list[int]] = {}
-                    group_to_mcs: dict[str, list[float]] = {}
-                    for i, p in enumerate(formatted_results):
-                        # Group by current assigned label (post unknown/molecule recovery)
-                        raw = str(p.label) if getattr(p, 'label', None) is not None else ''
-                        main = re.split(r'\(|,', raw)[0].strip()
-                        key = simplify_label(main) if main else 'Unknown'
-                        if not key or key == 'Unknown':
-                            continue
-                        group_to_indices.setdefault(key, []).append(i)
-                        if len(peak_mcs) > i:
-                            group_to_mcs.setdefault(key, []).append(float(peak_mcs[i]))
-
-                    if not group_to_indices:
-                        print("  Follow-on mc-vector RF: no non-unknown groups; skipping.")
-                    else:
-                        def _vectorize_mcs(mcs: list[float]) -> list[float]:
-                            if not mcs:
-                                return [0.0] * vec_len
-                            uniq = np.unique(np.round(np.asarray(mcs, dtype=float), int(followon_mc_vector_round_decimals)))
-                            vals = sorted(float(x) for x in uniq.tolist())
-                            if len(vals) > vec_len:
-                                # Downsample to cover the range (keep endpoints)
-                                idxs = np.linspace(0, len(vals) - 1, vec_len)
-                                idxs = np.round(idxs).astype(int).tolist()
-                                vals = [vals[j] for j in idxs]
-                            return vals + [0.0] * (vec_len - len(vals))
-
-                        groups = sorted(group_to_indices.keys())
-                        X_groups = np.asarray([_vectorize_mcs(group_to_mcs.get(g, [])) for g in groups], dtype=float)
-                        Xg = scaler_vec.transform(X_groups)
-                        probs = model_vec.predict_proba(Xg)
-
-                        updated_groups = 0
-                        for gi, g in enumerate(groups):
-                            prob = probs[gi]
-                            top_idx = int(np.argmax(prob))
-                            conf = float(prob[top_idx])
-                            pred_class = model_vec.classes_[top_idx]
-                            pred_label = str(target_decoder_vec[pred_class])
-                            pred_main = re.split(r'\(|,', pred_label)[0].strip()
-                            pred_key = simplify_label(pred_main) if pred_main else ''
-                            if not pred_key:
-                                continue
-
-                            # Apply per-peak physicality check (optional) for the proposed label
-                            ok = True
-                            if flag_unknowns:
-                                for idx in group_to_indices[g]:
-                                    mc_val = float(peak_mcs[idx]) if len(peak_mcs) > idx else float(formatted_results[idx].pos)
-                                    dist = _min_abs_distance_to_species_samples(pred_key, mc_val)
-                                    if dist > mc_threshold:
-                                        ok = False
-                                        break
-                            if not ok:
-                                continue
-
-                            for idx in group_to_indices[g]:
-                                p = formatted_results[idx]
-                                p.label = pred_main
-                                p.id_score = conf
-                                p.is_unknown = False
-                                p.method = 'RF-mcvec'
-                                p.detailed_id = DetailedId(el1=pred_main, conf1=conf, el2=str(p.detailed_id.el1) if p.detailed_id else 'Unknown', conf2=0.0)
-                            updated_groups += 1
-
-                        if updated_groups:
-                            print(f"  Follow-on mc-vector RF updated {updated_groups}/{len(groups)} species-groups.")
-            except Exception as e:
-                print(f"  [Warn] Follow-on mc-vector RF failed: {e}")
-
-        # 6. Optional: context-aware rescoring of ambiguous RF candidates.
+        # 5. Optional: context-aware rescoring of ambiguous RF candidates.
         # This is candidate-only: nearby peaks can change the winner only to another
         # label that RF already listed for the target peak.
         context_override_rows: list[dict] = []
@@ -1128,7 +874,7 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
 
         before_rescue_breakdown = _compute_accuracy_counts(formatted_results)
 
-        # 6. Optional: molecule RF "rescue" on peaks currently labeled as a single element (not unknown)
+        # 6. Optional: molecule RF "rescue" on peaks currently labeled as a single element (not unknown, after context rescoring)
         rescue_stats = {'considered': 0, 'overrides': 0, 'mixed_candidates': 0}
         rescue_override_rows: list[dict] = []
         if molecule_rf_rescue_elements and truth_molecules and _train_molecule_only_rf_if_needed():

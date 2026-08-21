@@ -10,13 +10,8 @@ context_rescue_unknown_same_label: true
 context_strength: 0.35
 context_window_da: 2.0
 flag_unknowns: true
-followon_mc_vector_rf: false
-followon_mc_vector_round_decimals: 3
 include_molecules: false
 iou: 0.01
-iter_intensity_stat_quantile: 0.9
-iter_min_intensity_fraction: 0.5
-iter_min_intensity_quantile: 0.1
 max_det: 2000
 mc_max: 307.2
 mc_min: 0.0
@@ -26,13 +21,11 @@ molecule_rf_rescue_elements: true
 molecule_rf_rescue_margin: 0.15
 molecule_rf_rescue_score_margin: 0.05
 molecule_rf_rescue_threshold: 0.8
-n_iter: 0
 neighbor_threshold: 2.0
 progress_min_fraction: 0.2
 rf_accuracy_top_n: 1
 save_artifacts: false
 save_peak_ranges_txt: false
-separate_molecule_rf: false
 training_num_files: 5000
 training_path: peak_detection/IonIdentificationModels/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001
 unknown_confidence_threshold: 0.6

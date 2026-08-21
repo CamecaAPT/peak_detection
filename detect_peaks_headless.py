@@ -57,8 +57,7 @@ from peak_detection.run_config import (
 # Script-specific tunables (beyond the shared RunConfig) that are persisted to / loadable
 # from the run-config YAML. Per-run I/O paths and expected-species inputs are deliberately
 # omitted (those change every run and the `command` header records them).
-SCRIPT_CONFIG_KEYS = ['save_artifacts', 'save_peak_ranges_txt',
-                      'separate_molecule_rf', 'progress_min_fraction']
+SCRIPT_CONFIG_KEYS = ['save_artifacts', 'save_peak_ranges_txt', 'progress_min_fraction']
 
 
 def _resolve_expected_species(elements=None, expected_rrng=None):
@@ -110,13 +109,9 @@ def detect_peaks_headless(
     save_peak_ranges_txt: bool = False,
     # YOLO parameters
     yolo_weights: str = 'best_v0_2026-06-23.pt',
-    n_iter: int = 0,
     iou: float = 0.01,
     conf: float = 0.05,
     max_det: int = 2000,
-    iter_min_intensity_quantile: float = 0.10,
-    iter_min_intensity_fraction: float = 0.50,
-    iter_intensity_stat_quantile: float = 0.90,
     mc_min: float = 0.0,
     mc_max: float = 307.2,
     # RF parameters
@@ -133,11 +128,8 @@ def detect_peaks_headless(
     use_neighborhood: bool = False,
     neighbor_threshold: float = 2.0,
     use_signature: bool = False,
-    separate_molecule_rf: bool = False,
     unknown_molecule_rf: bool = False,
     unknown_molecule_rf_threshold: float = 0.8,
-    followon_mc_vector_rf: bool = False,
-    followon_mc_vector_round_decimals: int = 3,
     # Unknown flagging
     flag_unknowns: bool = True,
     mc_threshold: float = 0.2,
@@ -189,7 +181,7 @@ def detect_peaks_headless(
 
     detected, _, _rf_acc, _rf_acc_ele, _unknown_count = predict_peak_ranges_yolo(
         input_file, spectrum_log, x, None,  # rrng_file=None -> no truth/eval
-        n_iter=n_iter, prefix=prefix,
+        prefix=prefix,
         flag_unknowns=flag_unknowns,
         mc_threshold=mc_threshold,
         training_path=training_path,
@@ -203,13 +195,9 @@ def detect_peaks_headless(
         unknown_mixed_element_molecule_confidence_threshold=unknown_mixed_element_molecule_confidence_threshold,
         include_molecules=include_molecules,
         yolo_weights=yolo_weights, iou=iou, conf=conf, max_det=max_det,
-        iter_min_intensity_quantile=iter_min_intensity_quantile,
-        iter_min_intensity_fraction=iter_min_intensity_fraction,
-        iter_intensity_stat_quantile=iter_intensity_stat_quantile,
         mc_min=mc_min, mc_max=mc_max,
         use_neighborhood=use_neighborhood, neighbor_threshold=neighbor_threshold,
         use_signature=use_signature,
-        separate_molecule_rf=separate_molecule_rf,
         unknown_molecule_rf=unknown_molecule_rf,
         molecule_rf_threshold=unknown_molecule_rf_threshold,
         unknown_confidence_threshold=unknown_confidence_threshold,
@@ -223,8 +211,6 @@ def detect_peaks_headless(
         context_distance_sigma=context_distance_sigma,
         context_rescue_unknown_same_label=context_rescue_unknown_same_label,
         context_rescue_unknown_min_score=context_rescue_unknown_min_score,
-        followon_mc_vector_rf=followon_mc_vector_rf,
-        followon_mc_vector_round_decimals=followon_mc_vector_round_decimals,
         species_list=species_list,
         elements_list=elements_list,
         save_artifacts=save_artifacts,
@@ -290,11 +276,6 @@ def main():
     # hyphen (e.g. --yolo-weights) and underscore (--yolo_weights) spellings.
     add_shared_args(parser)
 
-    # Script-specific: molecule-only RF mode (not part of the shared config).
-    parser.add_argument("--separate-molecule-rf", "--separate_molecule_rf",
-                        dest="separate_molecule_rf",
-                        action=argparse.BooleanOptionalAction, default=False)
-
     # Progress reporting
     parser.add_argument("--progress-min-fraction", type=float, default=None,
                         help="Throttle training-data progress bars to ~one update per this "
@@ -320,7 +301,6 @@ def main():
             artifacts_dir=args.artifacts_dir,
             save_artifacts=args.save_artifacts,
             save_peak_ranges_txt=args.save_peak_ranges_txt,
-            separate_molecule_rf=args.separate_molecule_rf,
             progress_min_fraction=args.progress_min_fraction,
             **cfg.to_kwargs(),
         )
