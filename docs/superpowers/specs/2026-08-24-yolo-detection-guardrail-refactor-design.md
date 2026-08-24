@@ -26,14 +26,22 @@ with no changes to `yolo_detection.py`, `classifiers/`, or the entry-point scrip
 ## Goals
 
 - `yolo_detection.py` contains only the model-agnostic YOLO1D ranging call.
-- All RF-specific guardrail logic and its CSV artifact writers move to a new
-  `peak_detection/IonIdentificationModels/RF/guardrail.py`.
-- `RF/rf_pipeline.py`'s `RFClassifierPipeline.run()` becomes the real orchestrator for the
-  RF model: ranging → train/infer → guardrails → accuracy breakdown.
+- Guardrail logic that only touches `PeakRange`/`DetailedId` fields and config thresholds
+  (unknown flagging, mixed-unknown flagging, context rescoring, accuracy-breakdown
+  computation, and their CSV writers) moves to a new, genuinely shared
+  `peak_detection/IonIdentificationModels/guardrail.py` — any future model's pipeline can
+  call these without depending on RF.
+- The molecule-rescue guardrails (steps 4 and 6 below) are RF-specific by construction —
+  they train and rerun a *second* RF model as the rescue mechanism — and move to a new
+  `RF/molecule_rescue.py` instead of the shared file.
+- `RF/rf_pipeline.py` becomes a plain function (`run_rf(ctx) -> dict`, registered via
+  `@register("rf")`) that orchestrates the RF model: ranging → train/infer → shared
+  guardrails → RF-specific molecule rescue → accuracy breakdown. No class needed (see
+  "Registry: plain functions, not a `ClassifierPipeline` ABC" below).
 - One self-contained YAML per model (`configs/models/<name>.yaml`); `configs/universal.yaml`
   is deleted.
 - `detect_peaks_refactor.py` and `detect_peaks_headless.py` route through the classifier
-  registry (`get_pipeline(model_name).run(ctx)`) instead of calling `yolo_detection.py`
+  registry (`get_pipeline(model_name)(ctx)`) instead of calling `yolo_detection.py`
   directly, gaining a `--model` flag (default `"rf"`).
 - `peak_detection/classifiers/` stays a separate, generic package (framework, not tied to
   any model).
@@ -46,6 +54,31 @@ with no changes to `yolo_detection.py`, `classifiers/`, or the entry-point scrip
   shape (or the existing graceful fallback when `'counts'` is absent kicks in).
 - No behavior change to detection results themselves — this is a structural refactor,
   verified by before/after diffing on the same input.
+- `DatasetStats` (`peak_detection/models.py`) and the `plot_rf_*` plotting functions are
+  untouched. They're already decoupled from this refactor (`process_dataset()` builds
+  `DatasetStats` itself from the returned breakdown `dict`) and are inherently RF-shaped
+  today (species/elemental/molecular counts, molecule-rescue fields). Splitting it into a
+  universal base + a per-model subclass (e.g. `RFDatasetStats`) is deferred until there's
+  an actual second model to design that split against.
+
+## Registry: plain functions, not a `ClassifierPipeline` ABC
+
+The original scaffolding used a `ClassifierPipeline` ABC (one abstract method, `run`) plus
+a registry that instantiates the class before calling `.run(ctx)`. RF's implementation
+has no `__init__` and no instance state, so the class is pure ceremony. Simplify to:
+
+- `classifiers/base.py`: keep only the `ClassifierContext` dataclass; drop
+  `ClassifierPipeline`.
+- `classifiers/__init__.py`: `_REGISTRY: dict[str, Callable[[ClassifierContext], dict]]`;
+  `register(name)` decorates a plain function; `get_pipeline(name)` returns that function
+  directly (no instantiation step).
+- `RF/rf_pipeline.py`: `class RFClassifierPipeline(ClassifierPipeline): def run(self, ctx):
+  ...` becomes `@register("rf")\ndef run_rf(ctx: ClassifierContext) -> dict: ...`.
+- Every call site changes from `get_pipeline(name).run(ctx)` to `get_pipeline(name)(ctx)`.
+
+If a future model needs to cache expensive state (a loaded checkpoint) across multiple
+`run()` calls in a batch, that's a reason to reintroduce a class *for that model* — it
+isn't needed today and isn't a breaking change to add later.
 
 ## Module layout
 
@@ -62,40 +95,46 @@ peak_detection/
 
   classifiers/                     (unchanged home, simplified internals)
     base.py
-      - ClassifierContext gains two optional fields: species_list: list[str] | None,
-        elements_list: list[str] | None (headless's explicit-species mode, used when
-        there's no RRNG truth file to derive the RF class list from).
+      - Drops ClassifierPipeline (see "Registry" section above). ClassifierContext gains
+        two optional fields: species_list: list[str] | None, elements_list: list[str] |
+        None (headless's explicit-species mode, used when there's no RRNG truth file to
+        derive the RF class list from).
     config.py
       - load_merged_config(model_name, *, configs_dir, override_path=None): loads
         configs/models/<model_name>.yaml, deep-merges override_path if given. No
         universal.yaml step.
-    __init__.py                    - unchanged (registry).
+    __init__.py                    - registry becomes function-based (see above).
 
   IonIdentificationModels/
+    guardrail.py (NEW, shared across models)
+      Standalone functions operating only on list[PeakRange]/DetailedId + config
+      thresholds — no RF-specific calls — mirroring today's model-agnostic steps inside
+      predict_peak_ranges_yolo:
+        - flag_unknown_peaks(...)                     [step 3: strict mc-distance +
+          low-confidence flagging]
+        - context_rescore_peaks(...)                  [step 5: neighbor-weighted
+          candidate rescoring over each peak's existing top-2 candidates; writes its own
+          context-override CSV whenever there are override rows — unconditional on
+          save_artifacts, matching today's behavior]
+        - flag_high_confidence_mixed_unknowns(...)
+        - compute_accuracy_breakdown(...), empty_accuracy_breakdown()
+        - write_detailed_results_csv(...), write_unknown_peak_error_report(...)
+        - private mc-distance helpers used by several of the above:
+          _min_abs_distance_to_samples, _nearest_sample_value,
+          _best_match_to_species_samples, _min_abs_distance_to_species_samples
     RF/
       rf_model.py                  - unchanged.
-      guardrail.py (NEW)
-        Standalone functions, each operating on list[PeakRange] (+ RF outputs), mirroring
-        today's numbered steps inside predict_peak_ranges_yolo:
-          - flag_unknown_peaks(...)                     [step 3: strict mc-distance +
-            low-confidence flagging]
+      molecule_rescue.py (NEW, RF-specific)
+        The two guardrail steps that retrain/rerun a second RF model:
           - rescue_unknowns_with_molecule_rf(...)       [step 4: second-pass molecule RF
             on peaks flagged unknown]
-          - context_rescore_peaks(...)                  [step 5: neighbor-weighted
-            candidate rescoring; writes its own context-override CSV whenever there are
-            override rows — unconditional on save_artifacts, matching today's behavior]
           - rescue_elements_with_molecule_rf(...)        [step 6: molecule-rescue pass on
             elemental winners; writes its own rescue-candidate CSV whenever there are
-            rescue rows — likewise unconditional on save_artifacts, matching today]
-          - flag_high_confidence_mixed_unknowns(...)
-          - compute_accuracy_breakdown(...), empty_accuracy_breakdown()
-          - write_detailed_results_csv(...), write_unknown_peak_error_report(...)
-          - private mc-distance helpers used by several of the above:
-            _min_abs_distance_to_samples, _nearest_sample_value,
-            _best_match_to_species_samples, _min_abs_distance_to_species_samples
+            rescue rows — unconditional on save_artifacts, matching today]
+        - train_molecule_only_rf(...) — the lazy-training helper both steps share.
       rf_pipeline.py
         flat_rf_kwargs(cfg)                              - unchanged.
-        RFClassifierPipeline.run(ctx) becomes the orchestrator:
+        run_rf(ctx) -> dict, registered via @register("rf"), becomes the orchestrator:
           1. Resolve target species/elements (label_map, truth_species_primary,
              truth_molecules, elements_for_molecules) from ctx.truth_data or
              ctx.species_list/ctx.elements_list — moved here verbatim from the old
@@ -104,13 +143,16 @@ peak_detection/
           3. Train + run RF (rf_model.create_RF_model / run_RF_model) on the primary
              class list.
           4. Build the mc-sample lookup (training.build_empirical_mc_samples).
-          5. Call guardrail.py steps 3-6 in sequence, lazily training the molecule-only
-             RF once (up front) if either step 4 or step 6 needs it (today's per-step
-             laziness collapses to "trained once if truth_molecules and (unknown_molecule_rf
-             or molecule_rf_rescue_elements)" — same actual trigger condition, no
-             observable behavior change).
-          6. compute_accuracy_breakdown() before/after rescue; write detailed-results CSV
-             and unknown-peak-error-report CSV via guardrail.py.
+          5. Call guardrail.flag_unknown_peaks, then molecule_rescue's
+             rescue_unknowns_with_molecule_rf, then guardrail.context_rescore_peaks, then
+             molecule_rescue's rescue_elements_with_molecule_rf, then
+             guardrail.flag_high_confidence_mixed_unknowns — same order as today — lazily
+             training the molecule-only RF once (up front) if either molecule_rescue step
+             needs it (today's per-step laziness collapses to "trained once if
+             truth_molecules and (unknown_molecule_rf or molecule_rf_rescue_elements)" —
+             same actual trigger condition, no observable behavior change).
+          6. guardrail.compute_accuracy_breakdown() before/after rescue; write
+             detailed-results CSV and unknown-peak-error-report CSV via guardrail.py.
           7. Map labels back through label_map (RRNG display labels).
           8. Save the per-call args snapshot YAML when ctx.save_artifacts is True (folds
              the previously-separate `save_args` flag into `save_artifacts`, since nothing
@@ -138,12 +180,12 @@ peak_detection/
   building a `ClassifierContext` (`rrng_file=None`, `truth_data=[]`,
   `elements_for_molecules=[]`, `species_list=species_list`, `elements_list=elements_list`,
   plus the existing prefix/artifacts_dir/save_artifacts/cfg) and calling
-  `get_pipeline(args.model).run(ctx)`; use `ctx.peaks` for `.rrng`/`.txt` output. Add
+  `get_pipeline(args.model)(ctx)`; use `ctx.peaks` for `.rrng`/`.txt` output. Add
   `--model` (default `"rf"`); `cfg = load_merged_config(args.model, ...)`.
 - `detect_peaks_refactor.py`: `process_dataset()` gains a `model_name: str = "rf"` parameter;
   replace its direct `predict_peak_ranges_yolo(...)` call the same way, building a
   `ClassifierContext` from its already-parsed truth data and calling
-  `get_pipeline(model_name).run(ctx)`. Add `--model` (default `"rf"`) to `main()`, threaded
+  `get_pipeline(model_name)(ctx)`. Add `--model` (default `"rf"`) to `main()`, threaded
   through `run_batch`. Plotting/batch-summary code is unchanged (consumes `ctx.peaks` +
   the breakdown dict, already model-agnostic).
 - `orchestrator.py`: unchanged (already routes through the registry).
