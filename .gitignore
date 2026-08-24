@@ -185,3 +185,11 @@ cython_debug/
 
 # macOS
 **/.DS_Store
+
+# Scratch verification output for docs/superpowers/plans refactor tasks
+/baseline_before/
+/baseline_after/
+
+# superpowers skill working files (specs/plans docs + SDD scratch workspace)
+/docs/
+/.superpowers/
