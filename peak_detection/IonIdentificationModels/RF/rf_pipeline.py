@@ -23,7 +23,6 @@ import yaml
 
 from ...classifiers import register
 from ...classifiers.base import ClassifierContext, ClassifierPipeline
-from ...models import PeakRange
 from ...training import build_empirical_mc_samples, load_ion_training_data
 from ...utils import is_molecule, simplify_label, yaml_safe
 from ...yolo_detection import run_yolo_ranging
@@ -149,7 +148,7 @@ class RFClassifierPipeline(ClassifierPipeline):
         step_timings['ranging'] = time.perf_counter() - t0
         if peaks is None:
             ctx.peaks = []
-            return {}
+            return guardrail.empty_accuracy_breakdown()
         ctx.peaks = peaks
 
         default_training_path = os.path.join(
@@ -219,9 +218,6 @@ class RFClassifierPipeline(ClassifierPipeline):
                     eff_neighbor_threshold=eff_neighbor_threshold, use_signature=use_signature,
                     run_rf_model_fn=_timed_run_RF_model,
                 )
-            before_rescue_breakdown = guardrail.compute_accuracy_breakdown(
-                peaks, truth_data, rf_accuracy_top_n=kwargs['rf_accuracy_top_n'])
-
             if kwargs['context_rescore']:
                 guardrail.context_rescore_peaks(
                     peaks, peak_mcs,
@@ -234,6 +230,9 @@ class RFClassifierPipeline(ClassifierPipeline):
                     context_rescue_unknown_min_score=kwargs['context_rescue_unknown_min_score'],
                     artifacts_dir=artifacts_dir, prefix=prefix,
                 )
+
+            before_rescue_breakdown = guardrail.compute_accuracy_breakdown(
+                peaks, truth_data, rf_accuracy_top_n=kwargs['rf_accuracy_top_n'])
 
             rescue_override_rows = []
             if kwargs['molecule_rf_rescue_elements'] and truth_molecules and mol_rf is not None:
