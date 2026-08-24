@@ -23,6 +23,11 @@ The goal of this refactor: finish that migration so a future model can be added 
 writing one `IonIdentificationModels/<Model>/` folder + one `configs/models/<name>.yaml`,
 with no changes to `yolo_detection.py`, `classifiers/`, or the entry-point scripts.
 
+Once `detect_peaks_refactor.py` and `detect_peaks_headless.py` route through the registry
+themselves (see Goals below), `orchestrator.py` no longer serves a purpose distinct from
+them — it was a minimal stand-in for "a model-agnostic entry point" while the other two
+scripts were still RF-hardcoded. It is deleted as part of this refactor.
+
 ## Goals
 
 - `yolo_detection.py` contains only the model-agnostic YOLO1D ranging call.
@@ -43,6 +48,8 @@ with no changes to `yolo_detection.py`, `classifiers/`, or the entry-point scrip
 - `detect_peaks_refactor.py` and `detect_peaks_headless.py` route through the classifier
   registry (`get_pipeline(model_name)(ctx)`) instead of calling `yolo_detection.py`
   directly, gaining a `--model` flag (default `"rf"`).
+- `orchestrator.py` is deleted — superseded now that both real entry-point scripts are
+  themselves model-agnostic.
 - `peak_detection/classifiers/` stays a separate, generic package (framework, not tied to
   any model).
 
@@ -54,12 +61,21 @@ with no changes to `yolo_detection.py`, `classifiers/`, or the entry-point scrip
   shape (or the existing graceful fallback when `'counts'` is absent kicks in).
 - No behavior change to detection results themselves — this is a structural refactor,
   verified by before/after diffing on the same input.
-- `DatasetStats` (`peak_detection/models.py`) and the `plot_rf_*` plotting functions are
-  untouched. They're already decoupled from this refactor (`process_dataset()` builds
+- `DatasetStats` (`peak_detection/models.py`) and `peak_detection/plotting.py` are
+  untouched. Both are already decoupled from this refactor (`process_dataset()` builds
   `DatasetStats` itself from the returned breakdown `dict`) and are inherently RF-shaped
-  today (species/elemental/molecular counts, molecule-rescue fields). Splitting it into a
-  universal base + a per-model subclass (e.g. `RFDatasetStats`) is deferred until there's
-  an actual second model to design that split against.
+  today: `DatasetStats` carries species/elemental/molecular counts and molecule-rescue
+  fields, and 11 of `plotting.py`'s 13 functions are literally named `plot_rf_*` and
+  consume those RF-shaped fields directly (only `plot_yolo_comparison` and
+  `plot_yolo_metrics_summary` are model-agnostic, covering ranging-only metrics). Splitting
+  `DatasetStats` into a universal base + a per-model subclass (e.g. `RFDatasetStats`), and
+  correspondingly generalizing the plotting functions, is deferred until there's an actual
+  second model to design that split against.
+- `report_metrics.py` is explicitly *not* included in the above — it's already
+  model-agnostic in practice (deliberately dependency-light, reads only generic
+  `*_detailed_results.csv` columns like `true element label` / `pred display label` /
+  `discarded`, which any model populates the same way via the shared
+  `write_detailed_results_csv` guardrail writer). No changes needed there.
 
 ## Registry: plain functions, not a `ClassifierPipeline` ABC
 
@@ -172,7 +188,7 @@ peak_detection/
   `universal.yaml`.
 - `RUN_CONFIG.md` updated to describe the single-file-per-model config (drop references to
   `configs/universal.yaml` and the merge-order section; document that each model owns one
-  yaml).
+  yaml) and to drop its mention of `orchestrator.py` as a separate entry point.
 
 ## Entry points
 
@@ -188,7 +204,7 @@ peak_detection/
   `get_pipeline(model_name)(ctx)`. Add `--model` (default `"rf"`) to `main()`, threaded
   through `run_batch`. Plotting/batch-summary code is unchanged (consumes `ctx.peaks` +
   the breakdown dict, already model-agnostic).
-- `orchestrator.py`: unchanged (already routes through the registry).
+- `orchestrator.py`: deleted (see Context above).
 
 ## Package exports
 
@@ -197,6 +213,7 @@ peak_detection/
 
 ## Cleanup
 
+- Delete `orchestrator.py` (see Context above).
 - Delete the stale `peak_detection/classifiers/__pycache__/` directory (holds a `.pyc` for
   an `rf_pipeline.py` that no longer lives in that folder).
 
