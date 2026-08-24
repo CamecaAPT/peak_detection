@@ -28,7 +28,7 @@ guardrails:
   mixed_unknown:
     unknown_mixed_element_molecule_confidence_threshold: 0.95
   context_rescore:
-    enabled: false
+    enabled: true
     context_window_da: 2.0
     context_strength: 0.35
     context_min_confidence: 0.75
@@ -38,11 +38,11 @@ guardrails:
     context_rescue_unknown_same_label: true
     context_rescue_unknown_min_score: 0.7
   molecule_rescue:
-    enabled: false
+    enabled: true
     molecule_rf_rescue_threshold: 0.8
     molecule_rf_rescue_margin: 0.15
     molecule_rf_rescue_score_margin: 0.05
     molecule_rf_rescue_dist_margin: 0.05
   unknown_molecule_rf:
-    enabled: false
+    enabled: true
     unknown_molecule_rf_threshold: 0.8
