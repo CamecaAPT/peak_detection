@@ -7,7 +7,7 @@ from .utils import min_max_scale, simplify_label, calculate_iou, calculate_iou_1
 from .IonIdentificationModels.RF.rf_model import make_RF_encoder, create_RF_model, run_RF_model, get_signature_features
 from .IonIdentificationModels.KDE.kde_model import make_lookup_model, predict_lookup_model, suggest_unknown_candidates, KDECache
 from .training import load_ion_training_data
-from .yolo_detection import predict_peak_ranges_yolo, remove_peaks_and_patch, identify_peaks
+from .yolo_detection import run_yolo_ranging
 
 __all__ = [
     'RangingNN', 'Ionclassifier', 'utils',
@@ -24,5 +24,5 @@ __all__ = [
     # training
     'load_ion_training_data',
     # yolo_detection
-    'predict_peak_ranges_yolo', 'remove_peaks_and_patch', 'identify_peaks',
+    'run_yolo_ranging',
 ]
