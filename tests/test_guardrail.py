@@ -94,3 +94,50 @@ def test_write_detailed_results_csv_skips_file_when_not_saving(tmp_path):
     )
     assert len(rows) == 1
     assert not (tmp_path / "sample_detailed_results.csv").exists()
+
+
+def test_context_rescore_peaks_candidate_switch_override(tmp_path):
+    # Target: low-confidence own top candidate 'Fe' (0.5), second candidate 'Cr' (0.4).
+    # A single nearby neighbor strongly supports 'Cr', enough to flip the label.
+    target = _peak('Fe', 0.5, el2='Cr', conf2=0.4, pos=10.0)
+    neighbor = _peak('Cr', 0.9, pos=10.5)
+    peaks = [target, neighbor]
+
+    rows = guardrail.context_rescore_peaks(
+        peaks, np.array([]),
+        context_window_da=2.0, context_strength=0.35,
+        context_min_confidence=0.75, context_min_candidate_confidence=0.05,
+        context_override_margin=0.05, context_distance_sigma=0.75,
+        context_rescue_unknown_same_label=True, context_rescue_unknown_min_score=0.7,
+        artifacts_dir=str(tmp_path), prefix='sample',
+    )
+
+    assert peaks[0].label == 'Cr'
+    assert peaks[0].is_unknown is False
+    assert peaks[0].method == 'RF+context'
+    assert len(rows) == 1
+    assert rows[0]['override_reason'] == 'candidate_switch'
+
+
+def test_context_rescore_peaks_same_label_unknown_rescue(tmp_path):
+    # Target flagged Unknown; its own top candidate ('Fe') matches what a nearby neighbor
+    # strongly supports, enough to rescue it back to known under the same label.
+    target = _peak('Unknown', 0.3, el1='Fe', conf1=0.3, el2='Cr', conf2=0.2, pos=10.0)
+    target.is_unknown = True
+    neighbor = _peak('Fe', 0.9, pos=10.3)
+    peaks = [target, neighbor]
+
+    rows = guardrail.context_rescore_peaks(
+        peaks, np.array([]),
+        context_window_da=2.0, context_strength=0.35,
+        context_min_confidence=0.75, context_min_candidate_confidence=0.05,
+        context_override_margin=0.05, context_distance_sigma=0.75,
+        context_rescue_unknown_same_label=True, context_rescue_unknown_min_score=0.5,
+        artifacts_dir=str(tmp_path), prefix='sample',
+    )
+
+    assert peaks[0].label == 'Fe'
+    assert peaks[0].is_unknown is False
+    assert peaks[0].method == 'RF+context'
+    assert len(rows) == 1
+    assert rows[0]['override_reason'] == 'same_label_unknown_rescue'
