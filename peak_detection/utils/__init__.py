@@ -1,9 +1,22 @@
+import numbers
 import re
 import numpy as np
 
 def min_max_scale(ar):
     """Min-max normalize an array to [0, 1]."""
     return (ar - ar.min()) / (ar.max() - ar.min())
+
+
+def yaml_safe(v):
+    """Coerce a value to a plain YAML/JSON scalar, or raise if it isn't one."""
+    if v is None or isinstance(v, (bool, str)):
+        return v
+    if isinstance(v, numbers.Integral):
+        return int(v)
+    if isinstance(v, numbers.Real):
+        return float(v)
+    raise TypeError(f"Non-serializable value: {v!r}")
+
 
 _RRNG_LABEL_RE = re.compile(r'([A-Z][a-z]?):(\d+)')
 _SIMPLE_LABEL_RE = re.compile(r'([A-Z][a-z]?)(\d*)')
