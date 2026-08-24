@@ -9,7 +9,11 @@ Adding a new model:
      ClassifierPipeline subclass decorated with @register("<name>").
   2. Import that module below so the decorator runs.
   3. Add configs/models/<name>.yaml with that model's tunables.
-No changes to orchestrator.py are needed.
+  4. Write that model's own flattener function (e.g. RF's flat_rf_kwargs()) and wire it
+     into both entry point scripts (detect_peaks_headless.py, detect_peaks_refactor.py) to
+     build its flat ctx.cfg. The --model flag alone does not make a new model plug-and-play
+     yet: both entry points currently call RF's flat_rf_kwargs unconditionally, so their
+     call sites need updating too.
 """
 from __future__ import annotations
 

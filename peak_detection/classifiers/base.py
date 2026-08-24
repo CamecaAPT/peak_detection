@@ -18,8 +18,12 @@ from ..models import PeakRange
 class ClassifierContext:
     """Everything a ClassifierPipeline needs to identify species for one dataset.
 
-    ``peaks`` is populated by ``ClassifierPipeline.run`` (today: predict_peak_ranges_yolo's
+    ``peaks`` is populated by ``ClassifierPipeline.run`` (today: run_yolo_ranging's
     internal ranging call); each PeakRange gets label/detailed_id/id_score/is_unknown/method set.
+
+    ``cfg`` is a FLAT, model-specific kwargs dict — each entry point script builds it via
+    that model's own flattener function (e.g. RF's ``flat_rf_kwargs()``), not a generic
+    nested-to-flat conversion.
     """
     apt_file: str
     rrng_file: str | None

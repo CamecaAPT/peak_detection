@@ -135,8 +135,8 @@ def process_dataset(
     mc_min: float = 0.0,
     mc_max: float = 307.2,
     # RF parameters
-    # NOTE: keyword defaults below mirror configs/universal.yaml + configs/models/rf.yaml (the
-    # single source of truth used by the CLI in main()); keep them in sync if either one changes.
+    # NOTE: keyword defaults below mirror configs/models/rf.yaml (the single source of
+    # truth used by the CLI in main()); keep them in sync if it changes.
     training_path: str = 'peak_detection/IonIdentificationModels/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001',
     training_num_files: int = 10000,
     augment_molecule_training_charge_ratios: bool = False,
@@ -530,8 +530,8 @@ def main():
 
     args = parser.parse_args()
 
-    # Model tunables come from configs/universal.yaml <- configs/models/rf.yaml <- --config
-    # override; no per-model CLI flags (single source of truth: the configs/ folder).
+    # Model tunables come from configs/models/<model>.yaml <- --config override; no
+    # per-model CLI flags (single source of truth: the configs/ folder).
     cfg = load_merged_config(args.model, configs_dir=CONFIGS_DIR, override_path=args.config)
 
     apt_path = args.apt_path

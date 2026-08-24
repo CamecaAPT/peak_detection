@@ -32,10 +32,10 @@ from .rf_model import create_RF_model, run_RF_model
 
 
 def flat_rf_kwargs(cfg: dict) -> dict:
-    """Flatten a merged universal+rf.yaml config dict into the flat kwarg names shared by
-    process_dataset and detect_peaks_headless (both use the same parameter names, except
-    they call it unknown_molecule_rf_threshold where this pipeline calls it
-    molecule_rf_threshold)."""
+    """Flatten a merged rf.yaml (+ optional --config override) config dict into the flat
+    kwarg names shared by process_dataset and detect_peaks_headless (both use the same
+    parameter names, except they call it unknown_molecule_rf_threshold where this pipeline
+    calls it molecule_rf_threshold)."""
     ranging = cfg.get("ranging", {})
     training = cfg.get("training", {})
     guardrails = cfg.get("guardrails", {})

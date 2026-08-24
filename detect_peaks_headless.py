@@ -66,13 +66,13 @@ def _resolve_expected_species(elements=None, expected_rrng=None):
     Exactly one source is used:
       - `elements`: an explicit list (or comma-separated string) of species. May
         mix elements and molecules (e.g. ['Zr', 'O', 'ZrO']). Base elements are
-        derived from these inside predict_peak_ranges_yolo.
+        derived from these inside RFClassifierPipeline.run().
       - `expected_rrng`: a range file whose labels define the species list and
         whose decomposed symbols define the base elements (same as the RRNG path
         in the original script).
 
     Returns (species_list, elements_list). Either may be None, meaning "let
-    predict_peak_ranges_yolo derive it".
+    the classifier pipeline derive it".
     """
     if elements is not None:
         if isinstance(elements, str):
@@ -267,8 +267,8 @@ def main():
                         help="Also write a plain-text peak_ranges.txt.")
 
     # Model tunables (YOLO / RF / unknown-flagging / context-rescoring) come from
-    # configs/universal.yaml <- configs/models/rf.yaml <- --config override; no per-model
-    # CLI flags (single source of truth: the configs/ folder).
+    # configs/models/<model>.yaml <- --config override; no per-model CLI flags
+    # (single source of truth: the configs/ folder).
 
     # Progress reporting
     parser.add_argument("--progress-min-fraction", type=float, default=None,
