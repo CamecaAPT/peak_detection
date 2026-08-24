@@ -22,6 +22,9 @@ from .IonIdentificationModels.RF.rf_model import (
     run_RF_model as _run_RF_model,
 )
 
+import yaml
+from peak_detection.RangingModels.RangingNN.predictor import DetectionPredictor
+
 # --- Lightweight per-call step-timing accumulator -------------------------------------
 # predict_peak_ranges_yolo clears this at entry and reports it before returning. The RF
 # training/inference functions below are thin timed wrappers around the real ones, so every
@@ -31,6 +34,33 @@ _STEP_TIMINGS: dict[str, float] = {}
 
 def _accumulate_time(key: str, seconds: float) -> None:
     _STEP_TIMINGS[key] = _STEP_TIMINGS.get(key, 0.0) + seconds
+
+
+def _empty_accuracy_breakdown() -> dict:
+    """Zeroed accuracy-breakdown shape used both on early-exit and as a failure fallback."""
+    return {
+        'species_including_unknowns': 0.0,
+        'species_excluding_unknowns': 0.0,
+        'elemental_including_unknowns': 0.0,
+        'elemental_excluding_unknowns': 0.0,
+        'molecular_including_unknowns': 0.0,
+        'molecular_excluding_unknowns': 0.0,
+        'counts': {
+            'species_correct_including_unknowns': 0,
+            'species_total_including_unknowns': 0,
+            'species_correct_excluding_unknowns': 0,
+            'species_total_excluding_unknowns': 0,
+            'elemental_correct_including_unknowns': 0,
+            'elemental_total_including_unknowns': 0,
+            'elemental_correct_excluding_unknowns': 0,
+            'elemental_total_excluding_unknowns': 0,
+            'molecular_correct_including_unknowns': 0,
+            'molecular_total_including_unknowns': 0,
+            'molecular_correct_excluding_unknowns': 0,
+            'molecular_total_excluding_unknowns': 0,
+            'unknown_with_truth': 0,
+        },
+    }
 
 
 def load_ion_training_data(*args, **kwargs):
@@ -57,37 +87,42 @@ def run_RF_model(*args, **kwargs):
         _accumulate_time('rf_infer', time.perf_counter() - t0)
 
 
-def remove_peaks_and_patch(spectrum: np.ndarray, detected_ranges: list[PeakRange], window: int = 10) -> np.ndarray:
+def run_yolo_ranging(spectrum_log, *, yolo_weights, iou, conf, max_det):
+    """Run the YOLO1D ranging model and return detected peak ranges.
+
+    Returns None (with a printed error) if the model weight/config files are missing.
+    Returns a (possibly empty) list of PeakRange otherwise — each with only
+    start/end/pos populated; label/id_score/method/detailed_id/is_unknown are left at
+    their dataclass defaults for a classifier pipeline to fill in.
     """
-    Replaces detected peak ranges with the average of surrounding noise.
-    """
-    new_spectrum = spectrum.copy()
-    for p in detected_ranges:
-        start_idx = int(np.round(p.start * 100))
-        end_idx = int(np.round(p.end * 100))
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    modelpath = os.path.join(base_dir, 'peak_detection', 'RangingModels', 'RangingNN', 'modelweights', yolo_weights)
+    cfg_path = os.path.join(base_dir, 'peak_detection', 'RangingModels', 'RangingNN', 'cfg', 'prediction_args.yaml')
 
-        start_idx = max(0, start_idx)
-        end_idx = min(len(spectrum) - 1, end_idx)
+    if not os.path.exists(modelpath) or not os.path.exists(cfg_path):
+        print(f"  [Error] YOLO model files not found at {modelpath}")
+        return None
 
-        left_window = spectrum[max(0, start_idx - window):max(0, start_idx)]
-        right_window = spectrum[min(len(spectrum), end_idx + 1):min(len(spectrum), end_idx + 1 + window)]
+    with open(cfg_path, 'r') as f:
+        cfg = yaml.safe_load(f)
+    cfg['iou'], cfg['conf'], cfg['max_det'] = iou, conf, max_det
 
-        noise_pool = np.concatenate([left_window, right_window])
-        if len(noise_pool) > 0:
-            avg_noise = np.mean(noise_pool)
-        else:
-            avg_noise = 0
+    if spectrum_log.shape[0] < 30720:
+        sp_padded = torch.zeros(30720)
+        sp_padded[:spectrum_log.shape[0]] = spectrum_log
+    else:
+        sp_padded = spectrum_log[:30720]
 
-        new_spectrum[start_idx:end_idx + 1] = avg_noise
+    predictor = DetectionPredictor(modelpath, sp_padded[None, None, ...], save_dir='test_results', cfg=cfg)
+    result = predictor()[0]
+    peak_range_pred = result[:, :2].cpu()
 
-    return new_spectrum
-
-
-def identify_peaks(detected_ranges: list[PeakRange], x: np.ndarray, spectrum_log, allowed_elements: list[str] | None = None, flag_unknowns: bool = True) -> list[PeakRange]:
-    """
-    Assigns chemical labels to detected ranges. (Simplified wrapper)
-    """
-    return detected_ranges
+    multiplier = 0.01
+    formatted_results = []
+    for r in peak_range_pred.tolist():
+        s, e = float(r[0]) * multiplier, float(r[1]) * multiplier
+        formatted_results.append(PeakRange(start=s, end=e, pos=(s + e) / 2))
+    return formatted_results
 
 
 def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
@@ -142,40 +177,14 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
     # via the timed wrappers above).
     _STEP_TIMINGS.clear()
 
-    import yaml
-    from peak_detection.RangingModels.RangingNN.predictor import DetectionPredictor
-
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     modelpath = os.path.join(base_dir, 'peak_detection', 'RangingModels', 'RangingNN', 'modelweights', yolo_weights)
     cfg_path = os.path.join(base_dir, 'peak_detection', 'RangingModels', 'RangingNN', 'cfg', 'prediction_args.yaml')
 
     if not os.path.exists(modelpath) or not os.path.exists(cfg_path):
         print(f"  [Error] YOLO model files not found at {modelpath}")
-        empty_breakdown = {
-            'species_including_unknowns': 0.0,
-            'species_excluding_unknowns': 0.0,
-            'elemental_including_unknowns': 0.0,
-            'elemental_excluding_unknowns': 0.0,
-            'molecular_including_unknowns': 0.0,
-            'molecular_excluding_unknowns': 0.0,
-            'counts': {
-                'species_correct_including_unknowns': 0,
-                'species_total_including_unknowns': 0,
-                'species_correct_excluding_unknowns': 0,
-                'species_total_excluding_unknowns': 0,
-                'elemental_correct_including_unknowns': 0,
-                'elemental_total_including_unknowns': 0,
-                'elemental_correct_excluding_unknowns': 0,
-                'elemental_total_excluding_unknowns': 0,
-                'molecular_correct_including_unknowns': 0,
-                'molecular_total_including_unknowns': 0,
-                'molecular_correct_excluding_unknowns': 0,
-                'molecular_total_excluding_unknowns': 0,
-                'unknown_with_truth': 0,
-            },
-        }
         if return_accuracy_breakdown:
-            return [], None, 0.0, 0.0, 0, empty_breakdown
+            return [], None, 0.0, 0.0, 0, _empty_accuracy_breakdown()
         return [], None, 0.0, 0.0, 0
 
     with open(cfg_path, 'r') as f:
@@ -230,11 +239,11 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
     prefix_internal = prefix if prefix else os.path.basename(apt_file).split('.')[0].lower()
 
     if save_args:
-        from peak_detection.run_config import _yaml_safe
+        from peak_detection.utils import yaml_safe
         snapshot = {}
         for k, v in _call_args.items():
             try:
-                snapshot[k] = _yaml_safe(v)
+                snapshot[k] = yaml_safe(v)
             except TypeError:
                 # Drop non-scalar inputs (spectrum_log, x_exp, species/elements lists, tensors).
                 continue
@@ -256,7 +265,7 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
             return list(comp.values())[0] == 1
         except Exception:
             return bool(re.fullmatch(r'[A-Z][a-z]?$', str(label)))
-    
+
     def _format_class_list(classes: list[str], max_items: int = 200) -> str:
         if not classes:
             return ""
@@ -270,6 +279,81 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
 
     training_data_path = training_path if training_path else os.path.join(base_dir, 'peak_detection', 'IonIdentificationModels', 'training_data', 'NewData', 'Data0001')
     eff_neighbor_threshold = neighbor_threshold if use_neighborhood else 0.0
+
+    # Defined once (rather than duplicated in both the main pipeline and the unknown-error
+    # report fallback below). mc_samples_by_species is looked up by name at call time, so
+    # these closures see whatever value it holds when they're actually invoked.
+    mc_samples_by_species: dict = {}
+
+    def _min_abs_distance_to_samples(sorted_samples: np.ndarray | None, value: float) -> float:
+        if sorted_samples is None or len(sorted_samples) == 0:
+            return float('inf')
+        idx = bisect.bisect_left(sorted_samples, value)
+        best = float('inf')
+        if idx < len(sorted_samples):
+            best = min(best, abs(float(sorted_samples[idx]) - value))
+        if idx > 0:
+            best = min(best, abs(float(sorted_samples[idx - 1]) - value))
+        return best
+
+    def _nearest_sample_value(sorted_samples: np.ndarray | None, value: float) -> float | None:
+        if sorted_samples is None or len(sorted_samples) == 0:
+            return None
+        idx = bisect.bisect_left(sorted_samples, value)
+        best_val = None
+        best_dist = float('inf')
+        if idx < len(sorted_samples):
+            v = float(sorted_samples[idx])
+            d = abs(v - value)
+            if d < best_dist:
+                best_dist, best_val = d, v
+        if idx > 0:
+            v = float(sorted_samples[idx - 1])
+            d = abs(v - value)
+            if d < best_dist:
+                best_dist, best_val = d, v
+        return best_val
+
+    def _best_match_to_species_samples(
+        species_key: str,
+        mc_val: float,
+        *,
+        allow_scaling_for_elements: bool,
+    ) -> tuple[float, float, float, float | None]:
+        """
+        Returns (best_dist, best_scale, scaled_mc, nearest_training_mc).
+
+        - For molecules: always considers scaling to allow charge-aware matching:
+          {1, 2, 3, 4, 0.5, 1/3, 0.25}.
+        - For elements: only considers scaling when allow_scaling_for_elements=True (same set).
+        """
+        samples = mc_samples_by_species.get(species_key)
+        if samples is None or len(samples) == 0:
+            return float('inf'), 1.0, mc_val, None
+
+        min_s = float(samples[0])
+        max_s = float(samples[-1])
+
+        consider_scaling = is_molecule(species_key) or allow_scaling_for_elements
+        multipliers = (1.0, 2.0, 3.0, 4.0, 0.5, 1.0 / 3.0, 0.25) if consider_scaling else (1.0,)
+
+        best_dist = float('inf')
+        best_mult = 1.0
+        best_scaled = mc_val
+        best_nearest = None
+
+        for mult in multipliers:
+            scaled = mc_val * mult
+            if mult != 1 and not ((min_s - mc_threshold) <= scaled <= (max_s + mc_threshold)):
+                continue
+            dist = _min_abs_distance_to_samples(samples, scaled)
+            if dist < best_dist:
+                best_dist = dist
+                best_mult = mult
+                best_scaled = scaled
+                best_nearest = _nearest_sample_value(samples, scaled)
+
+        return best_dist, best_mult, best_scaled, best_nearest
 
     try:
         before_rescue_breakdown = None
@@ -293,17 +377,6 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
                 formatted_results, x_exp, spectrum_log, scaler_rf, model_rf, target_decoder_rf,
                 neighbor_threshold=eff_neighbor_threshold, use_signature=use_signature
             )
-
-        def _min_abs_distance_to_samples(sorted_samples: np.ndarray | None, value: float) -> float:
-            if sorted_samples is None or len(sorted_samples) == 0:
-                return float('inf')
-            idx = bisect.bisect_left(sorted_samples, value)
-            best = float('inf')
-            if idx < len(sorted_samples):
-                best = min(best, abs(float(sorted_samples[idx]) - value))
-            if idx > 0:
-                best = min(best, abs(float(sorted_samples[idx - 1]) - value))
-            return best
 
         def _min_abs_distance_to_species_samples(species_key: str, mc_val: float) -> float:
             samples = mc_samples_by_species.get(species_key)
@@ -330,65 +403,6 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
                 if (min_s - mc_threshold) <= scaled <= (max_s + mc_threshold):
                     candidates.append(scaled)
             return min(_min_abs_distance_to_samples(samples, c) for c in candidates)
-
-        def _nearest_sample_value(sorted_samples: np.ndarray | None, value: float) -> float | None:
-            if sorted_samples is None or len(sorted_samples) == 0:
-                return None
-            idx = bisect.bisect_left(sorted_samples, value)
-            best_val = None
-            best_dist = float('inf')
-            if idx < len(sorted_samples):
-                v = float(sorted_samples[idx])
-                d = abs(v - value)
-                if d < best_dist:
-                    best_dist, best_val = d, v
-            if idx > 0:
-                v = float(sorted_samples[idx - 1])
-                d = abs(v - value)
-                if d < best_dist:
-                    best_dist, best_val = d, v
-            return best_val
-
-        def _best_match_to_species_samples(
-            species_key: str,
-            mc_val: float,
-            *,
-            allow_scaling_for_elements: bool,
-        ) -> tuple[float, float, float, float | None]:
-            """
-            Returns (best_dist, best_scale, scaled_mc, nearest_training_mc).
-
-            - For molecules: always considers scaling to allow charge-aware matching:
-              {1, 2, 3, 4, 0.5, 1/3, 0.25}.
-            - For elements: only considers scaling when allow_scaling_for_elements=True (same set).
-            """
-            samples = mc_samples_by_species.get(species_key)
-            if samples is None or len(samples) == 0:
-                return float('inf'), 1.0, mc_val, None
-
-            min_s = float(samples[0])
-            max_s = float(samples[-1])
-
-            consider_scaling = is_molecule(species_key) or allow_scaling_for_elements
-            multipliers = (1.0, 2.0, 3.0, 4.0, 0.5, 1.0 / 3.0, 0.25) if consider_scaling else (1.0,)
-
-            best_dist = float('inf')
-            best_mult = 1.0
-            best_scaled = mc_val
-            best_nearest = None
-
-            for mult in multipliers:
-                scaled = mc_val * mult
-                if mult != 1 and not ((min_s - mc_threshold) <= scaled <= (max_s + mc_threshold)):
-                    continue
-                dist = _min_abs_distance_to_samples(samples, scaled)
-                if dist < best_dist:
-                    best_dist = dist
-                    best_mult = mult
-                    best_scaled = scaled
-                    best_nearest = _nearest_sample_value(samples, scaled)
-
-            return best_dist, best_mult, best_scaled, best_nearest
 
         def _format_confidence_unknown_label(det: DetailedId | None, fallback_label: str) -> str:
             parts = []
@@ -477,7 +491,7 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
                 and float(getattr(best_det, 'conf1', 0.0) or 0.0) < float(unknown_confidence_threshold)
             ):
                 confidence_unknown = True
-            
+
             if (is_unphysical or winner_main == 'Unknown') and flag_unknowns:
                 p.label = f'Unknown ({winner_main})'
                 p.id_score, p.is_unknown = 1.0, True
@@ -962,18 +976,13 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
                         should_override = False
 
                     # Capture a compact accepted-rescue record for audit/debugging.
-                    try:
-                        mol_best_dist, mol_best_scale, mol_scaled_mc, mol_nearest_train = _best_match_to_species_samples(
-                            mol_key, mc_val, allow_scaling_for_elements=False
-                        )
-                    except Exception:
-                        mol_best_dist, mol_best_scale, mol_scaled_mc, mol_nearest_train = dist_m, 1.0, mc_val, None
-                    try:
-                        ele_best_dist, ele_best_scale, ele_scaled_mc, ele_nearest_train = _best_match_to_species_samples(
-                            ele_key, mc_val, allow_scaling_for_elements=False
-                        ) if ele_key else (float('inf'), 1.0, mc_val, None)
-                    except Exception:
-                        ele_best_dist, ele_best_scale, ele_scaled_mc, ele_nearest_train = dist_e, 1.0, mc_val, None
+                    mol_best_dist, mol_best_scale, mol_scaled_mc, mol_nearest_train = _best_match_to_species_samples(
+                        mol_key, mc_val, allow_scaling_for_elements=False
+                    )
+                    ele_best_dist, ele_best_scale, ele_scaled_mc, ele_nearest_train = (
+                        _best_match_to_species_samples(ele_key, mc_val, allow_scaling_for_elements=False)
+                        if ele_key else (float('inf'), 1.0, mc_val, None)
+                    )
 
                     rescue_override_rows.append({
                         'peak_start': float(getattr(p, 'start', np.nan)),
@@ -1118,79 +1127,14 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
         return ''
 
     if save_artifacts and flag_unknowns and any(bool(r.get('discarded')) for r in detailed_rows):
-        # If RF identification failed early, the mc-distance helpers may not exist.
-        # In that case, rebuild the lookup here and define local helpers so the report still writes.
-        if 'mc_samples_by_species' not in locals() or not isinstance(mc_samples_by_species, dict) or len(mc_samples_by_species) == 0:
+        # If RF identification failed early, mc_samples_by_species may still be empty; rebuild
+        # it here so the report can still compute distances (helpers are already defined above).
+        if not mc_samples_by_species:
             try:
                 print("  Building mc-distance lookup table (for unknown error report)...")
                 mc_samples_by_species = build_empirical_mc_samples(path=training_data_path, num_files=int(training_num_files))
             except Exception as e:
                 print(f"  [Warn] Failed to build mc-distance lookup for unknown error report ({e}).")
-                mc_samples_by_species = {}
-
-        if '_best_match_to_species_samples' not in locals():
-            def _min_abs_distance_to_samples(sorted_samples: np.ndarray | None, value: float) -> float:
-                if sorted_samples is None or len(sorted_samples) == 0:
-                    return float('inf')
-                idx = bisect.bisect_left(sorted_samples, value)
-                best = float('inf')
-                if idx < len(sorted_samples):
-                    best = min(best, abs(float(sorted_samples[idx]) - value))
-                if idx > 0:
-                    best = min(best, abs(float(sorted_samples[idx - 1]) - value))
-                return best
-
-            def _nearest_sample_value(sorted_samples: np.ndarray | None, value: float) -> float | None:
-                if sorted_samples is None or len(sorted_samples) == 0:
-                    return None
-                idx = bisect.bisect_left(sorted_samples, value)
-                best_val = None
-                best_dist = float('inf')
-                if idx < len(sorted_samples):
-                    v = float(sorted_samples[idx])
-                    d = abs(v - value)
-                    if d < best_dist:
-                        best_dist, best_val = d, v
-                if idx > 0:
-                    v = float(sorted_samples[idx - 1])
-                    d = abs(v - value)
-                    if d < best_dist:
-                        best_dist, best_val = d, v
-                return best_val
-
-            def _best_match_to_species_samples(
-                species_key: str,
-                mc_val: float,
-                *,
-                allow_scaling_for_elements: bool,
-            ) -> tuple[float, float, float, float | None]:
-                samples = mc_samples_by_species.get(species_key)
-                if samples is None or len(samples) == 0:
-                    return float('inf'), 1.0, mc_val, None
-
-                min_s = float(samples[0])
-                max_s = float(samples[-1])
-
-                consider_scaling = is_molecule(species_key) or allow_scaling_for_elements
-                multipliers = (1.0, 2.0, 3.0, 4.0, 0.5, 1.0 / 3.0, 0.25) if consider_scaling else (1.0,)
-
-                best_dist = float('inf')
-                best_mult = 1.0
-                best_scaled = mc_val
-                best_nearest = None
-
-                for mult in multipliers:
-                    scaled = mc_val * mult
-                    if mult != 1 and not ((min_s - mc_threshold) <= scaled <= (max_s + mc_threshold)):
-                        continue
-                    dist = _min_abs_distance_to_samples(samples, scaled)
-                    if dist < best_dist:
-                        best_dist = dist
-                        best_mult = mult
-                        best_scaled = scaled
-                        best_nearest = _nearest_sample_value(samples, scaled)
-
-                return best_dist, best_mult, best_scaled, best_nearest
 
         report_rows = []
         for row in detailed_rows:
@@ -1348,29 +1292,7 @@ def predict_peak_ranges_yolo(apt_file, spectrum_log, x_exp, rrng_file,
     # Use the computed before/after breakdowns from the in-pipeline evaluation.
     # If something failed before they were computed, fall back to a minimal empty breakdown.
     if after_rescue_breakdown is None:
-        after_rescue_breakdown = {
-            'species_including_unknowns': 0.0,
-            'species_excluding_unknowns': 0.0,
-            'elemental_including_unknowns': 0.0,
-            'elemental_excluding_unknowns': 0.0,
-            'molecular_including_unknowns': 0.0,
-            'molecular_excluding_unknowns': 0.0,
-            'counts': {
-                'species_correct_including_unknowns': 0,
-                'species_total_including_unknowns': 0,
-                'species_correct_excluding_unknowns': 0,
-                'species_total_excluding_unknowns': 0,
-                'elemental_correct_including_unknowns': 0,
-                'elemental_total_including_unknowns': 0,
-                'elemental_correct_excluding_unknowns': 0,
-                'elemental_total_excluding_unknowns': 0,
-                'molecular_correct_including_unknowns': 0,
-                'molecular_total_including_unknowns': 0,
-                'molecular_correct_excluding_unknowns': 0,
-                'molecular_total_excluding_unknowns': 0,
-                'unknown_with_truth': 0,
-            },
-        }
+        after_rescue_breakdown = _empty_accuracy_breakdown()
 
     accuracy_breakdown = dict(after_rescue_breakdown)
     if molecule_rf_rescue_elements and before_rescue_breakdown is not None:
