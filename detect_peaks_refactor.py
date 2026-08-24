@@ -532,7 +532,7 @@ def main():
 
     # Model tunables come from configs/universal.yaml <- configs/models/rf.yaml <- --config
     # override; no per-model CLI flags (single source of truth: the configs/ folder).
-    cfg = load_merged_config("rf", configs_dir=CONFIGS_DIR, override_path=args.config)
+    cfg = load_merged_config(args.model, configs_dir=CONFIGS_DIR, override_path=args.config)
 
     apt_path = args.apt_path
     rrng_path = args.rrng_path
