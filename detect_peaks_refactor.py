@@ -26,13 +26,12 @@ if current_dir not in sys.path:
 from peak_detection.models import DatasetStats
 from peak_detection.data_io import load_apt_from_file, parse_rrng, save_rrng
 from peak_detection.utils import calculate_iou, calculate_iou_metrics
-from peak_detection.yolo_detection import predict_peak_ranges_yolo, identify_peaks
-from peak_detection.run_config import (
-    add_shared_args,
-    apply_config_defaults,
-    config_from_namespace,
-    write_run_config,
-)
+from peak_detection.classifiers import get_pipeline, list_models
+from peak_detection.classifiers.base import ClassifierContext
+from peak_detection.classifiers.config import load_merged_config, write_effective_config
+from peak_detection.IonIdentificationModels.RF.rf_pipeline import flat_rf_kwargs
+
+CONFIGS_DIR = os.path.join(current_dir, "configs")
 from peak_detection.plotting import (
     plot_yolo_comparison,
     plot_rf_accuracy_summary,
@@ -136,8 +135,8 @@ def process_dataset(
     mc_min: float = 0.0,
     mc_max: float = 307.2,
     # RF parameters
-    # NOTE: keyword defaults below mirror peak_detection.run_config.SHARED_PARAMS (the single
-    # source of truth used by the CLI in main()); keep them in sync if either one changes.
+    # NOTE: keyword defaults below mirror configs/universal.yaml + configs/models/rf.yaml (the
+    # single source of truth used by the CLI in main()); keep them in sync if either one changes.
     training_path: str = 'peak_detection/IonIdentificationModels/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001',
     training_num_files: int = 10000,
     augment_molecule_training_charge_ratios: bool = False,
@@ -173,6 +172,7 @@ def process_dataset(
     save_rrng_output: bool = False,
     save_csv: bool = True,
     xlim: tuple = None,
+    model_name: str = "rf",
 ) -> DatasetStats:
     """
     Process a single APT dataset: detect peaks with YOLO, classify with RF, and evaluate.
@@ -215,38 +215,39 @@ def process_dataset(
         print(f"  Metadata saved: {output_dir}/{prefix}_rf_elements.txt, {output_dir}/{prefix}_true_species.txt")
 
     # --- RF ELEMENT IDENTIFICATION ---
-    all_predicted, _, rf_accuracy, rf_accuracy_ele, unknown_count, rf_accuracy_breakdown = predict_peak_ranges_yolo(
-        apt_file, spectrum_log, x, rrng_file,
-        prefix=prefix, artifacts_dir=output_dir,
-        flag_unknowns=flag_unknowns,
-        mc_threshold=mc_threshold,
-        training_path=training_path, training_num_files=training_num_files, include_molecules=include_molecules,
+    cfg = dict(
+        yolo_weights=yolo_weights, iou=iou, conf=conf, max_det=max_det, mc_min=mc_min, mc_max=mc_max,
+        training_path=training_path, training_num_files=training_num_files,
         augment_molecule_training_charge_ratios=augment_molecule_training_charge_ratios,
+        include_molecules=include_molecules, use_neighborhood=use_neighborhood,
+        neighbor_threshold=neighbor_threshold, use_signature=use_signature,
+        flag_unknowns=flag_unknowns, mc_threshold=mc_threshold,
+        unknown_confidence_threshold=unknown_confidence_threshold, rf_accuracy_top_n=rf_accuracy_top_n,
+        unknown_mixed_element_molecule_confidence_threshold=unknown_mixed_element_molecule_confidence_threshold,
         molecule_rf_rescue_elements=molecule_rf_rescue_elements,
         molecule_rf_rescue_threshold=molecule_rf_rescue_threshold,
         molecule_rf_rescue_margin=molecule_rf_rescue_margin,
         molecule_rf_rescue_score_margin=molecule_rf_rescue_score_margin,
         molecule_rf_rescue_dist_margin=molecule_rf_rescue_dist_margin,
-        unknown_mixed_element_molecule_confidence_threshold=unknown_mixed_element_molecule_confidence_threshold,
-        yolo_weights=yolo_weights, iou=iou, conf=conf, max_det=max_det,
-        mc_min=mc_min, mc_max=mc_max,
-        use_neighborhood=use_neighborhood, neighbor_threshold=neighbor_threshold,
-        use_signature=use_signature,
-        unknown_molecule_rf=unknown_molecule_rf,
-        molecule_rf_threshold=unknown_molecule_rf_threshold,
-        unknown_confidence_threshold=unknown_confidence_threshold,
-        rf_accuracy_top_n=rf_accuracy_top_n,
-        context_rescore=context_rescore,
-        context_window_da=context_window_da,
-        context_strength=context_strength,
-        context_min_confidence=context_min_confidence,
+        unknown_molecule_rf=unknown_molecule_rf, unknown_molecule_rf_threshold=unknown_molecule_rf_threshold,
+        context_rescore=context_rescore, context_window_da=context_window_da,
+        context_strength=context_strength, context_min_confidence=context_min_confidence,
         context_min_candidate_confidence=context_min_candidate_confidence,
-        context_override_margin=context_override_margin,
-        context_distance_sigma=context_distance_sigma,
+        context_override_margin=context_override_margin, context_distance_sigma=context_distance_sigma,
         context_rescue_unknown_same_label=context_rescue_unknown_same_label,
         context_rescue_unknown_min_score=context_rescue_unknown_min_score,
-        return_accuracy_breakdown=True,
     )
+    ctx = ClassifierContext(
+        apt_file=apt_file, rrng_file=rrng_file, x_exp=x, spectrum_log=spectrum_log,
+        truth_data=truth, elements_for_molecules=elements_for_molecules,
+        species_list=None, elements_list=None,
+        prefix=prefix, artifacts_dir=output_dir, save_artifacts=save_csv, cfg=cfg,
+    )
+    rf_accuracy_breakdown = get_pipeline(model_name).run(ctx)
+    all_predicted = ctx.peaks
+    rf_accuracy = float(rf_accuracy_breakdown.get('species_excluding_unknowns', 0.0)) if rf_accuracy_breakdown else 0.0
+    rf_accuracy_ele = float(rf_accuracy_breakdown.get('elemental_excluding_unknowns', 0.0)) if rf_accuracy_breakdown else 0.0
+    unknown_count = sum(1 for p in all_predicted if getattr(p, 'is_unknown', False))
 
     # --- RF ACCURACY OUTPUT ---
     if rf_accuracy_breakdown and 'counts' in rf_accuracy_breakdown:
@@ -347,9 +348,7 @@ def process_dataset(
     pred_max = max([p.end for p in all_predicted]) if all_predicted else 0
     plot_xmax = max(true_max, pred_max) + 5
 
-    # --- IDENTIFICATION ---
-    identified_peaks = identify_peaks(all_predicted, x, spectrum_log, allowed_elements=elements_for_molecules)
-
+    
     stats = DatasetStats(
         dataset=prefix,
         true_peaks_count=len(truth),
@@ -373,7 +372,7 @@ def process_dataset(
         unknown_count_no_truth=unknown_no_truth,
         predicted_peaks_with_truth=pred_with_truth,
         predicted_peaks_no_truth=pred_no_truth,
-        identifications=identified_peaks,
+        identifications=all_predicted,
         detected_ranges=all_predicted,
         x=x,
         spectrum=y_mapped,
@@ -511,6 +510,8 @@ def main():
     parser.add_argument("--config", type=str, default=None,
                         help="Path to a YAML run-config file. Its values become defaults that "
                              "explicit CLI flags still override.")
+    parser.add_argument("--model", type=str, default="rf", choices=list_models(),
+                        help="Classification model to use (see configs/models/).")
     parser.add_argument("--apt_path", type=str, default='ALL_APT_processedCSV',
                         help="Path to .apt/.csv file or directory for batch mode")
     parser.add_argument("--rrng_path", type=str, default='ALL_RRNG_NEW',
@@ -522,20 +523,16 @@ def main():
                              "identifications, and plots (default: current directory). The "
                              "run-config YAML is written here in both modes.")
 
-    # Shared YOLO / RF / unknown-flagging / context-rescoring parameters
-    # (single source of truth: peak_detection/run_config.py).
-    add_shared_args(parser)
-
     # Output control
     parser.add_argument("--save_plots", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--save_rrng_output", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--save_csv", action=argparse.BooleanOptionalAction, default=True)
 
-    # Apply --config YAML as defaults (explicit CLI flags still override), then parse.
-    apply_config_defaults(parser)
     args = parser.parse_args()
 
-    cfg = config_from_namespace(args)
+    # Model tunables come from configs/universal.yaml <- configs/models/rf.yaml <- --config
+    # override; no per-model CLI flags (single source of truth: the configs/ folder).
+    cfg = load_merged_config("rf", configs_dir=CONFIGS_DIR, override_path=args.config)
 
     apt_path = args.apt_path
     rrng_path = args.rrng_path
@@ -556,17 +553,18 @@ def main():
     else:
         out_base = args.output_dir or '.'
 
-    # Script-specific tunables to persist in the run config (I/O paths are intentionally
-    # excluded; the `command` header records those). These load back via --config too.
-    write_run_config(cfg, extra={k: getattr(args, k) for k in SCRIPT_CONFIG_KEYS},
-                     directory=out_base)
+    # Script-specific tunables to persist alongside the effective config (I/O paths are
+    # intentionally excluded; the `command` header records those). These load back via --config too.
+    write_effective_config(cfg, extra={k: getattr(args, k) for k in SCRIPT_CONFIG_KEYS},
+                           directory=out_base)
 
-    # Shared params come from the RunConfig; output-control flags are script-specific.
+    # Model params come from the merged yaml config; output-control flags are script-specific.
     common_kwargs = {
-        **cfg.to_kwargs(),
+        **flat_rf_kwargs(cfg),
         'save_plots': args.save_plots,
         'save_rrng_output': args.save_rrng_output,
         'save_csv': args.save_csv,
+        'model_name': args.model,
     }
 
     if is_single:

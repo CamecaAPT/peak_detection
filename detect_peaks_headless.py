@@ -45,14 +45,13 @@ from peak_detection.data_io import (
     parse_rrng,
     save_rrng,
 )
-from peak_detection.yolo_detection import predict_peak_ranges_yolo
 from peak_detection.training import set_progress_min_fraction
-from peak_detection.run_config import (
-    add_shared_args,
-    apply_config_defaults,
-    config_from_namespace,
-    write_run_config,
-)
+from peak_detection.classifiers import get_pipeline, list_models
+from peak_detection.classifiers.base import ClassifierContext
+from peak_detection.classifiers.config import load_merged_config, write_effective_config
+from peak_detection.IonIdentificationModels.RF.rf_pipeline import flat_rf_kwargs
+
+CONFIGS_DIR = os.path.join(current_dir, "configs")
 
 # Script-specific tunables (beyond the shared RunConfig) that are persisted to / loadable
 # from the run-config YAML. Per-run I/O paths and expected-species inputs are deliberately
@@ -100,6 +99,7 @@ def detect_peaks_headless(
     input_file: str,
     output_rrng: str,
     *,
+    model: str = 'rf',
     # Expected species (exactly one of these)
     elements=None,
     expected_rrng: str = None,
@@ -179,43 +179,36 @@ def detect_peaks_headless(
     if not artifacts_dir:
         artifacts_dir = os.path.dirname(os.path.abspath(output_rrng))
 
-    detected, _, _rf_acc, _rf_acc_ele, _unknown_count = predict_peak_ranges_yolo(
-        input_file, spectrum_log, x, None,  # rrng_file=None -> no truth/eval
-        prefix=prefix,
-        flag_unknowns=flag_unknowns,
-        mc_threshold=mc_threshold,
-        training_path=training_path,
-        training_num_files=training_num_files,
+    cfg = dict(
+        yolo_weights=yolo_weights, iou=iou, conf=conf, max_det=max_det, mc_min=mc_min, mc_max=mc_max,
+        training_path=training_path, training_num_files=training_num_files,
         augment_molecule_training_charge_ratios=augment_molecule_training_charge_ratios,
+        include_molecules=include_molecules, use_neighborhood=use_neighborhood,
+        neighbor_threshold=neighbor_threshold, use_signature=use_signature,
+        flag_unknowns=flag_unknowns, mc_threshold=mc_threshold,
+        unknown_confidence_threshold=unknown_confidence_threshold, rf_accuracy_top_n=rf_accuracy_top_n,
+        unknown_mixed_element_molecule_confidence_threshold=unknown_mixed_element_molecule_confidence_threshold,
         molecule_rf_rescue_elements=molecule_rf_rescue_elements,
         molecule_rf_rescue_threshold=molecule_rf_rescue_threshold,
         molecule_rf_rescue_margin=molecule_rf_rescue_margin,
         molecule_rf_rescue_score_margin=molecule_rf_rescue_score_margin,
         molecule_rf_rescue_dist_margin=molecule_rf_rescue_dist_margin,
-        unknown_mixed_element_molecule_confidence_threshold=unknown_mixed_element_molecule_confidence_threshold,
-        include_molecules=include_molecules,
-        yolo_weights=yolo_weights, iou=iou, conf=conf, max_det=max_det,
-        mc_min=mc_min, mc_max=mc_max,
-        use_neighborhood=use_neighborhood, neighbor_threshold=neighbor_threshold,
-        use_signature=use_signature,
-        unknown_molecule_rf=unknown_molecule_rf,
-        molecule_rf_threshold=unknown_molecule_rf_threshold,
-        unknown_confidence_threshold=unknown_confidence_threshold,
-        rf_accuracy_top_n=rf_accuracy_top_n,
-        context_rescore=context_rescore,
-        context_window_da=context_window_da,
-        context_strength=context_strength,
-        context_min_confidence=context_min_confidence,
+        unknown_molecule_rf=unknown_molecule_rf, unknown_molecule_rf_threshold=unknown_molecule_rf_threshold,
+        context_rescore=context_rescore, context_window_da=context_window_da,
+        context_strength=context_strength, context_min_confidence=context_min_confidence,
         context_min_candidate_confidence=context_min_candidate_confidence,
-        context_override_margin=context_override_margin,
-        context_distance_sigma=context_distance_sigma,
+        context_override_margin=context_override_margin, context_distance_sigma=context_distance_sigma,
         context_rescue_unknown_same_label=context_rescue_unknown_same_label,
         context_rescue_unknown_min_score=context_rescue_unknown_min_score,
-        species_list=species_list,
-        elements_list=elements_list,
-        save_artifacts=save_artifacts,
-        artifacts_dir=artifacts_dir,
     )
+    ctx = ClassifierContext(
+        apt_file=input_file, rrng_file=None, x_exp=x, spectrum_log=spectrum_log,
+        truth_data=[], elements_for_molecules=[],
+        species_list=species_list, elements_list=elements_list,
+        prefix=prefix, artifacts_dir=artifacts_dir, save_artifacts=save_artifacts, cfg=cfg,
+    )
+    get_pipeline(model).run(ctx)
+    detected = ctx.peaks
 
     # --- REQUIRED OUTPUT: range file ---
     out_parent = os.path.dirname(os.path.abspath(output_rrng))
@@ -248,6 +241,8 @@ def main():
                         help="Path to a YAML run-config file. Its values become defaults that "
                              "explicit CLI flags still override. (Required I/O flags must still "
                              "be supplied on the command line.)")
+    parser.add_argument("--model", type=str, default="rf", choices=list_models(),
+                        help="Classification model to use (see configs/models/).")
 
     # I/O
     parser.add_argument("--input", required=True,
@@ -271,38 +266,36 @@ def main():
     parser.add_argument("--save-peak-ranges-txt", action=argparse.BooleanOptionalAction, default=False,
                         help="Also write a plain-text peak_ranges.txt.")
 
-    # Shared YOLO / RF / unknown-flagging / context-rescoring parameters
-    # (single source of truth: peak_detection/run_config.py). These accept both
-    # hyphen (e.g. --yolo-weights) and underscore (--yolo_weights) spellings.
-    add_shared_args(parser)
+    # Model tunables (YOLO / RF / unknown-flagging / context-rescoring) come from
+    # configs/universal.yaml <- configs/models/rf.yaml <- --config override; no per-model
+    # CLI flags (single source of truth: the configs/ folder).
 
     # Progress reporting
     parser.add_argument("--progress-min-fraction", type=float, default=None,
                         help="Throttle training-data progress bars to ~one update per this "
                              "fraction of progress (e.g. 0.2 = every 20%%). Default: continuous.")
 
-    # Apply --config YAML as defaults (explicit CLI flags still override), then parse.
-    apply_config_defaults(parser)
     args = parser.parse_args()
 
-    cfg = config_from_namespace(args)
-    # Script-specific tunables to persist in the run config (I/O paths + expected-species
-    # inputs are excluded). These load back via --config too. The YAML is written into the
-    # output range file's directory so it sits alongside the result.
-    write_run_config(cfg, extra={k: getattr(args, k) for k in SCRIPT_CONFIG_KEYS},
-                     directory=os.path.dirname(os.path.abspath(args.output_rrng)))
+    cfg = load_merged_config(args.model, configs_dir=CONFIGS_DIR, override_path=args.config)
+    # Script-specific tunables to persist alongside the effective config (I/O paths + expected-
+    # species inputs are excluded). These load back via --config too. The YAML is written into
+    # the output range file's directory so it sits alongside the result.
+    write_effective_config(cfg, extra={k: getattr(args, k) for k in SCRIPT_CONFIG_KEYS},
+                           directory=os.path.dirname(os.path.abspath(args.output_rrng)))
 
     try:
         detect_peaks_headless(
             args.input,
             args.output_rrng,
+            model=args.model,
             elements=args.elements,
             expected_rrng=args.expected_rrng,
             artifacts_dir=args.artifacts_dir,
             save_artifacts=args.save_artifacts,
             save_peak_ranges_txt=args.save_peak_ranges_txt,
             progress_min_fraction=args.progress_min_fraction,
-            **cfg.to_kwargs(),
+            **flat_rf_kwargs(cfg),
         )
     except (ValueError, FileNotFoundError, RuntimeError) as e:
         print(f"Error: {e}")
