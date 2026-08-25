@@ -50,3 +50,10 @@ class ClassifierPipeline(ABC):
         """Run ranging + identification, populate ``ctx.peaks``, and return an accuracy
         breakdown dict (may be empty if truth data / accuracy scoring isn't applicable)."""
         raise NotImplementedError
+
+    @staticmethod
+    @abstractmethod
+    def flat_kwargs(cfg: dict) -> dict:
+        """Flatten this model's merged YAML config (nested: ranging/training/guardrails.*)
+        into the flat kwarg names its entry point call and ``ClassifierContext.cfg`` use."""
+        raise NotImplementedError

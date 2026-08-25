@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np
 
 from peak_detection.models import DetailedId, PeakRange
-from peak_detection.IonIdentificationModels import guardrail
+from peak_detection import guardrail
 
 
 def _peak(label, conf, el1=None, conf1=None, el2='', conf2=0.0, pos=10.0):

@@ -12,8 +12,8 @@ ranging:
 
 training:
   training_path: peak_detection/IonIdentificationModels/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001
-  training_num_files: 10000
-  augment_molecule_training_charge_ratios: false
+  training_num_files: 5000
+  augment_molecule_training_charge_ratios: true
   include_molecules: false
   use_neighborhood: false
   neighbor_threshold: 2.0
@@ -24,7 +24,7 @@ guardrails:
     flag_unknowns: true
     mc_threshold: 0.2
     unknown_confidence_threshold: 0.6
-    rf_accuracy_top_n: 1
+    rf_accuracy_top_n: 2
   mixed_unknown:
     unknown_mixed_element_molecule_confidence_threshold: 0.95
   context_rescore:

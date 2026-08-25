@@ -16,8 +16,8 @@ import re
 import numpy as np
 from pymatgen.core import Composition
 
-from ..models import DetailedId, PeakRange
-from ..utils import calculate_iou, is_molecule, simplify_label
+from .models import DetailedId, PeakRange
+from .utils import calculate_iou, is_molecule, simplify_label
 
 
 def empty_accuracy_breakdown() -> dict:

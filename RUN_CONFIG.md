@@ -9,7 +9,7 @@ The ~39 detection / RF / unknown-flagging / context-rescoring tunables they have
 
 - [`configs/models/<model>.yaml`](configs/models/rf.yaml) — a fully self-contained per-model config (ranging params + RF tunables + every guardrail this model uses).
 
-`peak_detection/classifiers/config.py::load_merged_config()` performs the merge; `peak_detection/IonIdentificationModels/RF/rf_pipeline.py::flat_rf_kwargs()` flattens the merged dict into the flat keyword names each entry point script's own function (`process_dataset` in `detect_peaks_refactor.py`, `detect_peaks_headless` in `detect_peaks_headless.py`) expects. **There are no per-model CLI flags** (no `--yolo_weights`, `--iou`, etc.) — to change a tunable, edit the relevant yaml or pass `--config path/to/override.yaml`.
+`peak_detection/registry/config.py::load_merged_config()` performs the merge; the model's own `flat_kwargs()` (fetched generically via `peak_detection/registry/__init__.py::get_flattener()` — RF's implementation lives in `peak_detection/IonIdentificationModels/RF/rf_pipeline.py::flat_rf_kwargs()`) flattens the merged dict into the flat keyword names each entry point script's own function (`process_dataset` in `detect_peaks_refactor.py`, `detect_peaks_headless` in `detect_peaks_headless.py`) expects. **There are no per-model CLI flags** (no `--yolo_weights`, `--iou`, etc.) — to change a tunable, edit the relevant yaml or pass `--config path/to/override.yaml`.
 
 ---
 

@@ -6,14 +6,13 @@ self-contained folder + its configs/models/<name>.yaml — no stray files left b
 
 Adding a new model:
   1. Create peak_detection/IonIdentificationModels/<Model>/<name>_pipeline.py with a
-     ClassifierPipeline subclass decorated with @register("<name>").
+     ClassifierPipeline subclass decorated with @register("<name>") that implements both
+     `run()` and the `flat_kwargs()` staticmethod (mapping that model's merged YAML onto the
+     flat kwargs its pipeline expects).
   2. Import that module below so the decorator runs.
   3. Add configs/models/<name>.yaml with that model's tunables.
-  4. Write that model's own flattener function (e.g. RF's flat_rf_kwargs()) and wire it
-     into both entry point scripts (detect_peaks_headless.py, detect_peaks_refactor.py) to
-     build its flat ctx.cfg. The --model flag alone does not make a new model plug-and-play
-     yet: both entry points currently call RF's flat_rf_kwargs unconditionally, so their
-     call sites need updating too.
+  4. That's it — the --model flag is plug-and-play: both entry point scripts fetch the
+     model's flattener via get_flattener(name) instead of hardcoding any one model's.
 """
 from __future__ import annotations
 
@@ -37,6 +36,14 @@ def get_pipeline(name: str) -> ClassifierPipeline:
     return _REGISTRY[name]()
 
 
+def get_flattener(name: str):
+    """Return the registered model's `flat_kwargs` staticmethod: maps its merged YAML
+    config dict onto the flat kwargs its entry point call expects."""
+    if name not in _REGISTRY:
+        raise KeyError(f"Unknown model '{name}'. Available: {sorted(_REGISTRY)}")
+    return _REGISTRY[name].flat_kwargs
+
+
 def list_models() -> list[str]:
     return sorted(_REGISTRY)
 
@@ -44,4 +51,7 @@ def list_models() -> list[str]:
 # Import built-in pipelines so their @register decorators run.
 from ..IonIdentificationModels.RF import rf_pipeline  # noqa: E402,F401
 
-__all__ = ["ClassifierPipeline", "ClassifierContext", "register", "get_pipeline", "list_models"]
+__all__ = [
+    "ClassifierPipeline", "ClassifierContext", "register", "get_pipeline",
+    "get_flattener", "list_models",
+]

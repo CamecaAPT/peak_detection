@@ -131,7 +131,6 @@ def _get_primary_species(r: PeakRange) -> tuple[str, bool]:
 
     return label, False
 
-
 def save_rrng(filepath: str, detected_ranges: list[PeakRange], color_map: dict | None = None) -> None:
     """
     Write predicted ranges to a .rrng file.
@@ -188,3 +187,50 @@ def save_rrng(filepath: str, detected_ranges: list[PeakRange], color_map: dict |
                 color = color_map.get(species_label, "FF0000")
                 color_part = f" Color:{color}"
             f.write(f"Range{i}={start} {end} Vol:0.00000 {rrng_str}{color_part}\n")
+
+# Saving top-two RRNG format
+# Fromat = 'Name:{el1}:{conf1}%-{el2}:{conf2}%' ie: Name:Cu:80%-H2:20% -> IVAS: Cu:80%-H2:20%
+
+def _get_top2_rrng_name(r: PeakRange) -> str:
+    """Build an RRNG ion name from a PeakRange's top-two identification candidates."""
+    detailed_id = r.detailed_id
+    if detailed_id is None:
+        return "Name:Unknown:0.0%-Unknown:0.0%"
+
+    el1 = str(detailed_id.el1 or "Unknown")
+    el2 = str(detailed_id.el2 or "Unknown")
+    conf1 = float(detailed_id.conf1 or 0.0) * 100
+    conf2 = float(detailed_id.conf2 or 0.0) * 100
+    return f"Name:{el1}:{conf1:.0f}%-{el2}:{conf2:.0f}%"
+
+
+def save_top2_rrng(filepath: str, detected_ranges: list[PeakRange], color_map: dict | None = None) -> None:
+    """Write predicted ranges using top-two identifications in RRNG format."""
+    ion_names = []
+    seen_ion_names = set()
+
+    for peak_range in detected_ranges:
+        ion_name = _get_top2_rrng_name(peak_range)
+        if ion_name not in seen_ion_names:
+            ion_names.append(ion_name)
+            seen_ion_names.add(ion_name)
+
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write("[Ions]\n")
+        f.write(f"Number={len(ion_names)}\n")
+        for index, ion_name in enumerate(ion_names, 1):
+            f.write(f"Ion{index}={ion_name}\n")
+        f.write("\n")
+
+        f.write("[Ranges]\n")
+        f.write(f"Number={len(detected_ranges)}\n")
+        for index, peak_range in enumerate(detected_ranges, 1):
+            ion_name = _get_top2_rrng_name(peak_range)
+            color_part = ""
+            if color_map is not None:
+                color = color_map.get(ion_name, "FF0000")
+                color_part = f" Color:{color}"
+            f.write(
+                f"Range{index}={peak_range.start:.5f} {peak_range.end:.5f} "
+                f"Vol:0.00000 {ion_name}{color_part}\n"
+            )

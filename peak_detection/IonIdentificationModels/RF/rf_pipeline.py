@@ -1,7 +1,7 @@
 """RF species-classification pipeline: registers "rf" with the classifier registry.
 
 RFClassifierPipeline.run() is the real orchestrator: ranging (yolo_detection.run_yolo_ranging)
--> RF train/infer (rf_model.py) -> shared guardrails (IonIdentificationModels/guardrail.py) ->
+-> RF train/infer (rf_model.py) -> shared guardrails (peak_detection/guardrail.py) ->
 RF-specific molecule rescue (RF/molecule_rescue.py) -> accuracy breakdown -> CSV artifacts.
 Deleting this folder removes the RF model entirely (config + pipeline + underlying
 rf_model.py all live together here).
@@ -21,12 +21,12 @@ import time
 import numpy as np
 import yaml
 
-from ...classifiers import register
-from ...classifiers.base import ClassifierContext, ClassifierPipeline
+from ...registry import register
+from ...registry.base import ClassifierContext, ClassifierPipeline
 from ...training import build_empirical_mc_samples, load_ion_training_data
 from ...utils import is_molecule, simplify_label, yaml_safe
 from ...yolo_detection import run_yolo_ranging
-from .. import guardrail
+from ... import guardrail
 from . import molecule_rescue
 from .rf_model import create_RF_model, run_RF_model
 
@@ -91,6 +91,8 @@ def flat_rf_kwargs(cfg: dict) -> dict:
 
 @register("rf")
 class RFClassifierPipeline(ClassifierPipeline):
+    flat_kwargs = staticmethod(flat_rf_kwargs)
+
     def run(self, ctx: ClassifierContext) -> dict:
         step_timings: dict[str, float] = {}
 

@@ -2,7 +2,7 @@
 RF model restricted to molecular species, as the rescue mechanism for both unknown peaks
 and elemental winners. These are RF-specific by construction (they depend on RF's
 train/infer functions) and therefore live here rather than in the shared
-IonIdentificationModels/guardrail.py.
+peak_detection/guardrail.py.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import numpy as np
 
 from ...models import DetailedId, PeakRange
 from ...utils import is_molecule, simplify_label
-from ..guardrail import _best_match_to_species_samples, _is_elemental_label, _min_abs_distance_to_species_samples
+from ...guardrail import _best_match_to_species_samples, _is_elemental_label, _min_abs_distance_to_species_samples
 
 
 def train_molecule_only_rf(

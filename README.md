@@ -24,11 +24,11 @@ peak_detection/
     ├── data_io.py                 # APT/RRNG file I/O
     ├── training.py                # Classifier training-data loading
     ├── utils/                     # Shared helpers (label parsing, IoU, config coercion)
-    ├── classifiers/                # Pluggable classifier registry, selected via --model
+    ├── guardrail.py                # Shared, model-agnostic guardrails (unknown-flagging, context-rescore, ...)
+    ├── registry/                   # Pluggable classifier registry, selected via --model
     │   ├── base.py                 # ClassifierContext, ClassifierPipeline ABC
     │   └── config.py                # Per-model YAML config loader
     ├── IonIdentificationModels/
-    │   ├── guardrail.py            # Shared, model-agnostic guardrails (unknown-flagging, context-rescore, ...)
     │   ├── RF/                     # Random-forest species classifier (registers "rf")
     │   │   ├── rf_model.py          # Underlying RF train/infer implementation
     │   │   ├── rf_pipeline.py       # RFClassifierPipeline orchestrator
@@ -77,6 +77,7 @@ No per-model tunables (`--iou`, `--conf`, etc.) exist as flags on either script 
 | `--output_dir OUTPUT_DIR` | No | derived from `--apt_path` (single) / current directory (batch) | Single mode: the dataset folder. Batch mode: the parent folder holding per-dataset folders plus the global summary CSV, identifications, and plots. |
 | `--save_plots` / `--no-save_plots` | No | `--save_plots` (on) | Write comparison plots. |
 | `--save_rrng_output` / `--no-save_rrng_output` | No | `--no-save_rrng_output` (off) | Write the predicted ranges as a `.RRNG` file. |
+| `--save-top2-rrng` / `--no-save-top2-rrng` | No | `--no-save-top2-rrng` (off) | Use the top-two identification format (`Name:{el1}:{conf1}%-{el2}:{conf2}%`) for the predicted `.RRNG` file. Requires `--save_rrng_output`. |
 | `--save_csv` / `--no-save_csv` | No | `--save_csv` (on) | Write per-peak/per-dataset result CSVs (detailed results, summary, identifications). |
 
 #### `detect_peaks_headless.py` parameters
@@ -92,6 +93,7 @@ No per-model tunables (`--iou`, `--conf`, etc.) exist as flags on either script 
 | `--artifacts-dir ARTIFACTS_DIR` | No | directory of `--output-rrng` | Directory for optional diagnostic artifacts. |
 | `--save-artifacts` / `--no-save-artifacts` | No | `--no-save-artifacts` (off) | Write per-dataset diagnostic CSVs (detailed results, unknown-peak error report). |
 | `--save-peak-ranges-txt` / `--no-save-peak-ranges-txt` | No | `--no-save-peak-ranges-txt` (off) | Also write a plain-text `peak_ranges.txt` next to the result. |
+| `--save-top2-rrng` / `--no-save-top2-rrng` | No | `--no-save-top2-rrng` (off) | Use the top-two identification format (`Name:{el1}:{conf1}%-{el2}:{conf2}%`) in the output `.rrng` file. |
 | `--progress-min-fraction PROGRESS_MIN_FRACTION` | No | continuous updates | Throttle training-data progress bars to ~one update per this fraction of progress (e.g. `0.2` = every 20%). |
 
 ### Installation 
