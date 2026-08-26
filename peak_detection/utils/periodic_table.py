@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-DATA_FILE = Path(__file__).parent / "data" / "periodic_table.json"
+DATA_FILE = Path(__file__).parent.parent / "data" / "periodic_table.json"
 
 with open(DATA_FILE, encoding="utf8") as f:
     PERIODIC_TABLE = json.load(f)

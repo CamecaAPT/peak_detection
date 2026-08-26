@@ -37,8 +37,16 @@ class ConfigChoice
 }
 
 // ---- Stage 2: settings surfaced in a property grid before the run (edit, then Resume) ----
-class RangingSettings
+class RangingSettings : INotifyPropertyChanged
 {
+	private bool _savePeakRangesTxt = true;
+	private bool _saveTop2Rrng = true;
+
+	public event PropertyChangedEventHandler PropertyChanged;
+
+	private void Notify(string propertyName) => PropertyChanged?.Invoke(
+		this, new PropertyChangedEventArgs(propertyName));
+
 	[Category("Identification"), DisplayName("Range molecules"),
 	 Description("Identify molecular ions (e.g. ZrO), not just elements.  (training.include_molecules)")]
 	public bool RangeMolecules { get; set; } = false;
@@ -93,9 +101,34 @@ class RangingSettings
 	 Description("Write per-dataset diagnostic CSVs (detailed results, unknown report).  (--save-artifacts)")]
 	public bool SaveArtifacts { get; set; } = true;
 
-	[Category("Output"), DisplayName("Save peak ranges txt"),
+	[Category("Output"), DisplayName("Save peak ranges txt"), RefreshProperties(RefreshProperties.All),
 	 Description("Also write a plain-text peak_ranges.txt next to the result.  (--save-peak-ranges-txt)")]
-	public bool SavePeakRangesTxt { get; set; } = true;
+	public bool SavePeakRangesTxt
+	{
+		get => _savePeakRangesTxt;
+		set
+		{
+			if (_savePeakRangesTxt == value) return;
+			_savePeakRangesTxt = value;
+			if (!value) SaveTop2Rrng = false;
+			Notify(nameof(SavePeakRangesTxt));
+		}
+	}
+
+	[Category("Output"), DisplayName("Save top-2 RRNG"), RefreshProperties(RefreshProperties.All),
+	 Description("Write top-two identification candidates to the output RRNG. Requires Save peak ranges txt.  (--save-top2-rrng)")]
+	public bool SaveTop2Rrng
+	{
+		get => _saveTop2Rrng;
+		set
+		{
+			if (value && !SavePeakRangesTxt) SavePeakRangesTxt = true;
+			value = value && SavePeakRangesTxt;
+			if (_saveTop2Rrng == value) return;
+			_saveTop2Rrng = value;
+			Notify(nameof(SaveTop2Rrng));
+		}
+	}
 }
 
 // argparse BooleanOptionalAction => pass --flag or --no-flag explicitly (don't rely on the py default).
@@ -167,6 +200,7 @@ void ApplyRunConfig(RangingSettings s, Dictionary<string, string> c)
 	if (c.TryGetValue("output_control.progress_min_fraction", out v) && v.ToLowerInvariant() != "null") s.ProgressUpdateFraction = YDouble(v);
 	if (c.TryGetValue("output_control.save_artifacts", out v)) s.SaveArtifacts = YBool(v);
 	if (c.TryGetValue("output_control.save_peak_ranges_txt", out v)) s.SavePeakRangesTxt = YBool(v);
+	if (c.TryGetValue("output_control.save_top2_rrng", out v)) s.SaveTop2Rrng = YBool(v);
 }
 
 // Serializes the reviewed grid settings into the nested ranging/training/guardrails.* schema,
@@ -250,6 +284,9 @@ else
 var s = await Api.ReviewSettingsAsync(settings,
 	configExists ? "Review parameters (loaded from RunConfig)" : "Review parameters (script defaults)");
 
+// Top-two RRNG output depends on peak_ranges.txt output being enabled.
+if (!s.SavePeakRangesTxt) s.SaveTop2Rrng = false;
+
 // ---- 5. Export APT for the model to re-histogram ----
 var apt = await ms.ExportAptAsync(aptPath);
 if (!apt.Ok) { Print($"APT export failed: {apt.Message}"); return; }
@@ -271,6 +308,7 @@ var args = new List<string>
 	"--output-rrng", rngPath,
 	Flag("save-artifacts", s.SaveArtifacts),
 	Flag("save-peak-ranges-txt", s.SavePeakRangesTxt),
+	Flag("save-top2-rrng", s.SaveTop2Rrng),
 };
 if (s.ProgressUpdateFraction > 0)   // 0 => omit, tool keeps its continuous default
 {

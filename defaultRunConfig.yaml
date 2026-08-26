@@ -50,5 +50,6 @@ guardrails:
 # section to preload its own grid, then passes these as direct CLI flags, not via --config).
 output_control:
   progress_min_fraction: 0.2
-  save_artifacts: false
-  save_peak_ranges_txt: false
+  save_artifacts: true
+  save_peak_ranges_txt: true
+  save_top2_rrng: true

@@ -197,8 +197,11 @@ def _get_top2_rrng_name(r: PeakRange) -> str:
     if detailed_id is None:
         return "Name:Unknown:0.0%-Unknown:0.0%"
 
-    el1 = str(detailed_id.el1 or "Unknown")
-    el2 = str(detailed_id.el2 or "Unknown")
+    # IVAS splits range fields on whitespace, so candidate labels must be one token.
+    el1 = re.sub(r'\s+', '', str(detailed_id.el1 or "Unknown"))
+    el2 = re.sub(r'\s+', '', str(detailed_id.el2 or "Unknown"))
+    el1 = el1 or "Unknown"
+    el2 = el2 or "Unknown"
     conf1 = float(detailed_id.conf1 or 0.0) * 100
     conf2 = float(detailed_id.conf2 or 0.0) * 100
     return f"Name:{el1}:{conf1:.0f}%-{el2}:{conf2:.0f}%"
