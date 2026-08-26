@@ -9,7 +9,7 @@
 //   6. load the generated .rrng back onto the selected node.
 //
 // Load it via the console's "Load…" button (or "Run script…"), then Run (or Ctrl+Enter).
-// When loaded from disk, ScriptDirectory is this file's folder, so extRoot and the default
+// When loaded from disk, Api.ScriptDirectory is this file's folder, so extRoot and the default
 // RunConfig resolve against it automatically.
 //
 // NOTE: detect_peaks_headless.py has no per-param model-tunable CLI flags (configs/models/rf.yaml
@@ -91,11 +91,11 @@ class RangingSettings
 
 	[Category("Output"), DisplayName("Save artifacts"),
 	 Description("Write per-dataset diagnostic CSVs (detailed results, unknown report).  (--save-artifacts)")]
-	public bool SaveArtifacts { get; set; } = false;
+	public bool SaveArtifacts { get; set; } = true;
 
 	[Category("Output"), DisplayName("Save peak ranges txt"),
 	 Description("Also write a plain-text peak_ranges.txt next to the result.  (--save-peak-ranges-txt)")]
-	public bool SavePeakRangesTxt { get; set; } = false;
+	public bool SavePeakRangesTxt { get; set; } = true;
 }
 
 // argparse BooleanOptionalAction => pass --flag or --no-flag explicitly (don't rely on the py default).
@@ -196,11 +196,11 @@ string BuildOverrideYaml(RangingSettings s)
 }
 
 // ---- 1. Require a selected Mass Spectrum Analysis ----
-if (await Api.GetSelectedMassSpectrumAsync() is not {} ms) { Print("Select a Mass Spectrum Analysis first."); return; }
+if (Api.SelectedMassSpectrum is not {} ms) { Print("Select a Mass Spectrum Analysis first."); return; }
 
 // ---- Paths (cwd = project root so the tool's relative weights/training paths resolve) ----
 // When the script is loaded from disk, extRoot is its own folder; the fallback covers REPL runs.
-var extRoot    = ScriptDirectory ?? @"C:\workspace\extensions\peak_detection";
+var extRoot    = Api.ScriptDirectory ?? @"C:\workspace\extensions\peak_detection";
 var venvPython = Path.Combine(extRoot, @".venv\Scripts\python.exe");
 var pyScript   = Path.Combine(extRoot, "detect_peaks_headless.py");
 
@@ -212,12 +212,12 @@ var aptPath    = Path.Combine(outputDir, "spectrum.apt");
 var rngPath    = Path.Combine(outputDir, "result.rrng");
 
 // ---- 2. Expected ions come from the TOP-LEVEL range file, supplied as a list ----
-string[] elements = await ms.GetRootExpectedElementsAsync();
+string[] elements = ms.GetRootExpectedElements();
 if (elements.Length == 0) { Print("The top-level range file has no ion definitions to seed from."); return; }
 Print($"Expected ions ({elements.Length}): {string.Join(",", elements)}");
 
 // ---- 3. Choose the RunConfig YAML, then preload its parameters ----
-var cc = await Settings.ReviewAsync(new ConfigChoice(), "Choose RunConfig YAML");
+var cc = await Api.ReviewSettingsAsync(new ConfigChoice(), "Choose RunConfig YAML");
 var configPath = (cc.RunConfigPath ?? "").Trim();
 if (configPath.Length > 0 && !Path.IsPathRooted(configPath))
 	configPath = Path.Combine(extRoot, configPath);
@@ -247,7 +247,7 @@ else
 }
 
 // ---- 4. Review/adjust the (possibly preloaded) settings ----
-var s = await Settings.ReviewAsync(settings,
+var s = await Api.ReviewSettingsAsync(settings,
 	configExists ? "Review parameters (loaded from RunConfig)" : "Review parameters (script defaults)");
 
 // ---- 5. Export APT for the model to re-histogram ----
@@ -279,7 +279,7 @@ if (s.ProgressUpdateFraction > 0)   // 0 => omit, tool keeps its continuous defa
 }
 
 Print("Running peak detection… (model load + inference can take a while)");
-var result = await RunProcessAsync(venvPython, args, extRoot,
+var result = await Api.RunProcessAsync(venvPython, args, extRoot,
 	onOutput: line => Print(line),
 	onError:  line => Print($"[err] {line}"));   // stderr streamed live too
 if (!result.Ok) { Print($"Peak detection failed (exit {result.ExitCode})."); return; }
