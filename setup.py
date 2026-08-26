@@ -21,7 +21,6 @@ setup(
     install_requires=[
         "torch==2.1.2",  # keep at 2.1.2 for euler cluser
         "numpy==1.23.5",  # pinned for compatibility with torch==2.1.2 and apav
-        "pymatgen",
         "matplotlib",
         "scikit-image",
         "scikit-learn==1.6.1",

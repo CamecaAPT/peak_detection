@@ -14,10 +14,10 @@ import os
 import re
 
 import numpy as np
-from pymatgen.core import Composition
 
 from .models import DetailedId, PeakRange
 from .utils import calculate_iou, is_molecule, simplify_label
+from .utils.periodic_table import is_valid_element
 
 
 def empty_accuracy_breakdown() -> dict:
@@ -48,13 +48,7 @@ def empty_accuracy_breakdown() -> dict:
 
 
 def _is_elemental_label(label: str) -> bool:
-    try:
-        comp = Composition(str(label))
-        if len(comp.elements) != 1:
-            return False
-        return list(comp.values())[0] == 1
-    except Exception:
-        return bool(re.fullmatch(r'[A-Z][a-z]?$', str(label)))
+    return is_valid_element(str(label).strip())
 
 
 def _min_abs_distance_to_samples(sorted_samples: np.ndarray | None, value: float) -> float:

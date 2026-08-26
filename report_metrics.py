@@ -1,6 +1,6 @@
 """Shared metric-formatting and truth-label helpers for the run-report scripts.
 
-Kept dependency-light (pandas only, no torch/sklearn/pymatgen): importing anything from
+Kept dependency-light (pandas only, no torch/sklearn): importing anything from
 the `peak_detection` package pulls in the full ML stack via peak_detection/__init__.py,
 which write_dataset_peak_summaries.py and write_classification_audit_summary.py should
 not require just to regenerate a text report from existing output CSVs.
