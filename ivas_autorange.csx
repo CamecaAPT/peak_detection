@@ -25,6 +25,7 @@ using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System;
 
 // ---- Stage 1: choose the RunConfig YAML to preload from ----
 class ConfigChoice
@@ -37,15 +38,36 @@ class ConfigChoice
 }
 
 // ---- Stage 2: settings surfaced in a property grid before the run (edit, then Resume) ----
-class RangingSettings : INotifyPropertyChanged
+class RangingSettings : INotifyPropertyChanged, IDataErrorInfo
 {
 	private bool _savePeakRangesTxt = true;
 	private bool _saveTop2Rrng = true;
+	private string _expectedIons = "";
 
 	public event PropertyChangedEventHandler PropertyChanged;
 
 	private void Notify(string propertyName) => PropertyChanged?.Invoke(
 		this, new PropertyChangedEventArgs(propertyName));
+
+	[Browsable(false), EditorBrowsable(EditorBrowsableState.Never)]
+	public string Error => string.IsNullOrWhiteSpace(ExpectedIons)
+		? "Expected ions is required before running peak detection."
+		: "";
+
+	public string this[string columnName] => columnName == nameof(ExpectedIons) ? Error : "";
+
+	[Category("Identification"), DisplayName("Expected ions"), RefreshProperties(RefreshProperties.All),
+	 Description("Comma-separated ions used by the RF classifier. Preloaded from the selected range file; edit as needed.")]
+	public string ExpectedIons
+	{
+		get => _expectedIons;
+		set
+		{
+			if (_expectedIons == value) return;
+			_expectedIons = value ?? "";
+			Notify(nameof(ExpectedIons));
+		}
+	}
 
 	[Category("Identification"), DisplayName("Range molecules"),
 	 Description("Identify molecular ions (e.g. ZrO), not just elements.  (training.include_molecules)")]
@@ -245,10 +267,20 @@ Directory.CreateDirectory(outputDir);
 var aptPath    = Path.Combine(outputDir, "spectrum.apt");
 var rngPath    = Path.Combine(outputDir, "result.rrng");
 
-// ---- 2. Expected ions come from the TOP-LEVEL range file, supplied as a list ----
-string[] elements = ms.GetRootExpectedElements();
-if (elements.Length == 0) { Print("The top-level range file has no ion definitions to seed from."); return; }
-Print($"Expected ions ({elements.Length}): {string.Join(",", elements)}");
+// ---- 2. Preload expected ions from the TOP-LEVEL range file when available ----
+string[] elements;
+try
+{
+	elements = ms.GetRootExpectedElements() ?? new string[0];
+}
+catch (Exception ex)
+{
+	elements = new string[0];
+	Print($"No usable range file found; expected ions can be entered manually. ({ex.Message})");
+}
+Print(elements.Length > 0
+	? $"Expected ions preloaded from range file ({elements.Length}): {string.Join(",", elements)}"
+	: "No expected ions found in the range file; enter them in the settings dialog.");
 
 // ---- 3. Choose the RunConfig YAML, then preload its parameters ----
 var cc = await Api.ReviewSettingsAsync(new ConfigChoice(), "Choose RunConfig YAML");
@@ -258,6 +290,7 @@ if (configPath.Length > 0 && !Path.IsPathRooted(configPath))
 bool configExists = configPath.Length > 0 && File.Exists(configPath);
 
 var settings = new RangingSettings();
+settings.ExpectedIons = string.Join(", ", elements);
 if (configExists)
 {
 	Print($"Loading RunConfig: {configPath}");
@@ -283,6 +316,16 @@ else
 // ---- 4. Review/adjust the (possibly preloaded) settings ----
 var s = await Api.ReviewSettingsAsync(settings,
 	configExists ? "Review parameters (loaded from RunConfig)" : "Review parameters (script defaults)");
+
+var expectedIonText = (s.ExpectedIons ?? "").Trim();
+elements = expectedIonText.Split(new[] { ',', ';', ' ', '\t', '\r', '\n' },
+	StringSplitOptions.RemoveEmptyEntries);
+if (elements.Length == 0)
+{
+	Print("ERROR: Expected ions is empty. Enter at least one element or molecule before clicking Resume.");
+	throw new InvalidOperationException("Expected ions is required before running peak detection.");
+}
+Print($"Using expected ions ({elements.Length}): {string.Join(",", elements)}");
 
 // Top-two RRNG output depends on peak_ranges.txt output being enabled.
 if (!s.SavePeakRangesTxt) s.SaveTop2Rrng = false;
