@@ -77,7 +77,7 @@ No per-model tunables (`--iou`, `--conf`, etc.) exist as flags on either script 
 | `--output_dir OUTPUT_DIR` | No | derived from `--apt_path` (single) / current directory (batch) | Single mode: the dataset folder. Batch mode: the parent folder holding per-dataset folders plus the global summary CSV, identifications, and plots. |
 | `--save_plots` / `--no-save_plots` | No | `--save_plots` (on) | Write comparison plots. |
 | `--save_rrng_output` / `--no-save_rrng_output` | No | `--no-save_rrng_output` (off) | Write the predicted ranges as a `.RRNG` file. |
-| `--save-top2-rrng` / `--no-save-top2-rrng` | No | `--no-save-top2-rrng` (off) | Use the top-two identification format (`Name:{el1}:{conf1}%-{el2}:{conf2}%`) for the predicted `.RRNG` file. Requires `--save_rrng_output`. |
+| `--save-rrng-with-uncertainty` / `--no-save-rrng-with-uncertainty` | No | `--no-save-rrng-with-uncertainty` (off) | Use the top-two identification format (`Name:{el1}:{conf1}%-{el2}:{conf2}%`) for the predicted `.RRNG` file. Requires `--save_rrng_output`. |
 | `--save_csv` / `--no-save_csv` | No | `--save_csv` (on) | Write per-peak/per-dataset result CSVs (detailed results, summary, identifications). |
 
 #### `detect_peaks_headless.py` parameters
@@ -93,7 +93,7 @@ No per-model tunables (`--iou`, `--conf`, etc.) exist as flags on either script 
 | `--artifacts-dir ARTIFACTS_DIR` | No | directory of `--output-rrng` | Directory for optional diagnostic artifacts. |
 | `--save-artifacts` / `--no-save-artifacts` | No | `--no-save-artifacts` (off) | Write per-dataset diagnostic CSVs (detailed results, unknown-peak error report). |
 | `--save-peak-ranges-txt` / `--no-save-peak-ranges-txt` | No | `--no-save-peak-ranges-txt` (off) | Also write a plain-text `peak_ranges.txt` next to the result. |
-| `--save-top2-rrng` / `--no-save-top2-rrng` | No | `--no-save-top2-rrng` (off) | Use the top-two identification format (`Name:{el1}:{conf1}%-{el2}:{conf2}%`) in the output `.rrng` file. |
+| `--save-rrng-with-uncertainty` / `--no-save-rrng-with-uncertainty` | No | `--no-save-rrng-with-uncertainty` (off) | Use the top-two identification format (`Name:{el1}:{conf1}%-{el2}:{conf2}%`) in the output `.rrng` file. |
 | `--progress-min-fraction PROGRESS_MIN_FRACTION` | No | continuous updates | Throttle training-data progress bars to ~one update per this fraction of progress (e.g. `0.2` = every 20%). |
 
 ### Installation 

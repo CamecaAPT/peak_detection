@@ -182,49 +182,77 @@ def save_rrng(filepath: str, detected_ranges: list[PeakRange], color_map: dict |
         for i, (r, (rrng_str, is_unknown, species_label)) in enumerate(zip(detected_ranges, range_info), 1):
             start = f"{r.start:.5f}"
             end = f"{r.end:.5f}"
+            # Collect unique base elements and build per-range species info
             color_part = ""
             if color_map is not None:
                 color = color_map.get(species_label, "FF0000")
                 color_part = f" Color:{color}"
             f.write(f"Range{i}={start} {end} Vol:0.00000 {rrng_str}{color_part}\n")
 
-# Saving top-two RRNG format
-# Fromat = 'Name:{el1}:{conf1}%-{el2}:{conf2}%' ie: Name:Cu:80%-H2:20% -> IVAS: Cu:80%-H2:20%
+# Save standard RRNG notation for known species and top-two candidates for uncertain unknowns.
+# Examples: Fe:1, Fe:1 O:1, Name:Unknown(Fe:60%-Si:40%), or Name:Unknown.
+
 
 def _get_top2_rrng_name(r: PeakRange) -> str:
-    """Build an RRNG ion name from a PeakRange's top-two identification candidates."""
-    detailed_id = r.detailed_id
-    if detailed_id is None:
-        return "Name:Unknown:0.0%-Unknown:0.0%"
-
-    # IVAS splits range fields on whitespace, so candidate labels must be one token.
-    el1 = re.sub(r'\s+', '', str(detailed_id.el1 or "Unknown"))
-    el2 = re.sub(r'\s+', '', str(detailed_id.el2 or "Unknown"))
-    el1 = el1 or "Unknown"
-    el2 = el2 or "Unknown"
-    conf1 = float(detailed_id.conf1 or 0.0) * 100
-    conf2 = float(detailed_id.conf2 or 0.0) * 100
-    return f"Name:{el1}:{conf1:.0f}%-{el2}:{conf2:.0f}%"
+   species, is_unknown = _get_primary_species(r)
 
 
-def save_top2_rrng(filepath: str, detected_ranges: list[PeakRange], color_map: dict | None = None) -> None:
-    """Write predicted ranges using top-two identifications in RRNG format."""
+   if not (r.is_unknown or is_unknown):
+       rrng_name, _ = _species_to_rrng_notation(species)
+       return rrng_name
+
+
+   detailed_id = r.detailed_id
+   if detailed_id is None:
+       return "Name:Unknown"
+
+
+   primary = str(detailed_id.el1 or "Unknown").strip()
+   secondary = str(detailed_id.el2 or "Unknown").strip()
+
+
+   if primary.casefold() == "unknown":
+       return "Name:Unknown"
+
+
+   candidate_match = re.search(r"Unknown\s*\(([^)]*)\)", str(r.label or ""))
+   if candidate_match:
+       primary_match = re.match(r"([A-Za-z][\w]*)", candidate_match.group(1))
+       if primary_match:
+           primary = primary_match.group(1)
+
+
+   primary = re.sub(r"\s+", "", primary)
+   secondary = re.sub(r"\s+", "", secondary)
+
+
+   return (
+       f"Name:Unknown("
+       f"{primary}:{float(detailed_id.conf1) * 100:.0f}%"
+       f"-{secondary}:{float(detailed_id.conf2) * 100:.0f}%)"
+   )
+
+
+
+def save_rrng_with_uncertainty(filepath: str, detected_ranges: list[PeakRange], color_map: dict | None = None) -> None:
+    """Write predicted ranges with uncertainty details for ambiguous unknowns."""
     ion_names = []
     seen_ion_names = set()
-
     for peak_range in detected_ranges:
         ion_name = _get_top2_rrng_name(peak_range)
         if ion_name not in seen_ion_names:
             ion_names.append(ion_name)
             seen_ion_names.add(ion_name)
-
+    
+    
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write("[Ions]\n")
         f.write(f"Number={len(ion_names)}\n")
         for index, ion_name in enumerate(ion_names, 1):
             f.write(f"Ion{index}={ion_name}\n")
         f.write("\n")
-
+        
+        
         f.write("[Ranges]\n")
         f.write(f"Number={len(detected_ranges)}\n")
         for index, peak_range in enumerate(detected_ranges, 1):

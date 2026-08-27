@@ -28,7 +28,7 @@ from peak_detection.data_io import (
     load_apt_from_file,
     parse_rrng,
     save_rrng,
-    save_top2_rrng as write_top2_rrng,
+        save_rrng_with_uncertainty as write_rrng_with_uncertainty,
 )
 from peak_detection.utils import calculate_iou, calculate_iou_metrics
 from peak_detection.registry import get_pipeline, get_flattener, list_models
@@ -61,7 +61,7 @@ except Exception:
 
 # Script-specific output-control tunables (beyond the shared RunConfig) that are persisted
 # to / loadable from the run-config YAML. Per-run I/O paths are deliberately omitted.
-SCRIPT_CONFIG_KEYS = ['save_plots', 'save_csv', 'save_rrng_output', 'save_top2_rrng']
+SCRIPT_CONFIG_KEYS = ['save_plots', 'save_csv', 'save_rrng_output', 'save_rrng_with_uncertainty']
 
 
 def _default_output_dir(apt_file):
@@ -174,7 +174,7 @@ def process_dataset(
     # Output control
     save_plots: bool = True,
     save_rrng_output: bool = False,
-    save_top2_rrng: bool = False,
+    save_rrng_with_uncertainty: bool = False,
     save_csv: bool = True,
     xlim: tuple = None,
     model_name: str = "rf",
@@ -396,8 +396,8 @@ def process_dataset(
     # --- SAVE RRNG ---
     if save_rrng_output:
         rrng_out_path = os.path.join(output_dir, f"{prefix}_predicted.RRNG")
-        if save_top2_rrng:
-            write_top2_rrng(rrng_out_path, all_predicted)
+        if save_rrng_with_uncertainty:
+            write_rrng_with_uncertainty(rrng_out_path, all_predicted)
         else:
             save_rrng(rrng_out_path, all_predicted)
         print(f"Predicted RRNG saved to {rrng_out_path}")
@@ -534,7 +534,7 @@ def main():
     # Output control
     parser.add_argument("--save_plots", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--save_rrng_output", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--save-top2-rrng", action=argparse.BooleanOptionalAction, default=False,
+    parser.add_argument("--save-rrng-with-uncertainty", action=argparse.BooleanOptionalAction, default=False,
                         help="Write predicted RRNG files using top-two identification candidates.")
     parser.add_argument("--save_csv", action=argparse.BooleanOptionalAction, default=True)
 
@@ -573,7 +573,7 @@ def main():
         **get_flattener(args.model)(cfg),
         'save_plots': args.save_plots,
         'save_rrng_output': args.save_rrng_output,
-        'save_top2_rrng': args.save_top2_rrng,
+        'save_rrng_with_uncertainty': args.save_rrng_with_uncertainty,
         'save_csv': args.save_csv,
         'model_name': args.model,
     }

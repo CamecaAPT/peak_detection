@@ -44,7 +44,7 @@ from peak_detection.data_io import (
     load_apt_from_file,
     parse_rrng,
     save_rrng,
-    save_top2_rrng as write_top2_rrng,
+        save_rrng_with_uncertainty as write_rrng_with_uncertainty,
 )
 from peak_detection.training import set_progress_min_fraction
 from peak_detection.registry import get_pipeline, get_flattener, list_models
@@ -57,7 +57,7 @@ CONFIGS_DIR = os.path.join(current_dir, "configs")
 # from the run-config YAML. Per-run I/O paths and expected-species inputs are deliberately
 # omitted (those change every run and the `command` header records them).
 SCRIPT_CONFIG_KEYS = [
-    'save_artifacts', 'save_peak_ranges_txt', 'save_top2_rrng', 'progress_min_fraction'
+    'save_artifacts', 'save_peak_ranges_txt', 'save_rrng_with_uncertainty', 'progress_min_fraction'
 ]
 
 
@@ -109,7 +109,7 @@ def detect_peaks_headless(
     artifacts_dir: str = None,
     save_artifacts: bool = False,
     save_peak_ranges_txt: bool = False,
-    save_top2_rrng: bool = False,
+    save_rrng_with_uncertainty: bool = False,
     # YOLO parameters
     yolo_weights: str = 'best_v0_2026-06-23.pt',
     iou: float = 0.01,
@@ -216,8 +216,8 @@ def detect_peaks_headless(
     # --- REQUIRED OUTPUT: range file ---
     out_parent = os.path.dirname(os.path.abspath(output_rrng))
     os.makedirs(out_parent, exist_ok=True)
-    if save_top2_rrng:
-        write_top2_rrng(output_rrng, detected)
+    if save_rrng_with_uncertainty:
+        write_rrng_with_uncertainty(output_rrng, detected)
     else:
         save_rrng(output_rrng, detected)
     print(f"Output range file written: {output_rrng} ({len(detected)} ranges)")
@@ -271,7 +271,7 @@ def main():
                         help="Write per-dataset diagnostic CSVs (detailed results, unknown report).")
     parser.add_argument("--save-peak-ranges-txt", action=argparse.BooleanOptionalAction, default=False,
                         help="Also write a plain-text peak_ranges.txt.")
-    parser.add_argument("--save-top2-rrng", action=argparse.BooleanOptionalAction, default=False,
+    parser.add_argument("--save-rrng-with-uncertainty", action=argparse.BooleanOptionalAction, default=False,
                         help="Write the output RRNG using top-two identification candidates.")
 
     # Model tunables (YOLO / RF / unknown-flagging / context-rescoring) come from
@@ -302,7 +302,7 @@ def main():
             artifacts_dir=args.artifacts_dir,
             save_artifacts=args.save_artifacts,
             save_peak_ranges_txt=args.save_peak_ranges_txt,
-            save_top2_rrng=args.save_top2_rrng,
+            save_rrng_with_uncertainty=args.save_rrng_with_uncertainty,
             progress_min_fraction=args.progress_min_fraction,
             **get_flattener(args.model)(cfg),
         )

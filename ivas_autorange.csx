@@ -81,6 +81,10 @@ class RangingSettings : INotifyPropertyChanged, IDataErrorInfo
 	 Description("Confidence threshold below which a peak is flagged unknown.  (guardrails.unknown_flagging.mc_threshold)")]
 	public double McThreshold { get; set; } = 0.2;
 
+	[Category("Identification"), DisplayName("Unknown confidence threshold"),
+	 Description("Minimum RF confidence required before a peak is accepted instead of flagged unknown.  (guardrails.unknown_flagging.unknown_confidence_threshold)")]
+	public double UnknownConfidenceThreshold { get; set; } = 0.6;
+
 	[Category("Molecule RF"), DisplayName("Unknown molecule RF"),
 	 Description("Run the random-forest pass for unknown molecules.  (guardrails.unknown_molecule_rf.enabled)")]
 	public bool UnknownMoleculeRf { get; set; } = true;
@@ -138,7 +142,7 @@ class RangingSettings : INotifyPropertyChanged, IDataErrorInfo
 	}
 
 	[Category("Output"), DisplayName("Save top-2 RRNG"), RefreshProperties(RefreshProperties.All),
-	 Description("Write top-two identification candidates to the output RRNG. Requires Save peak ranges txt.  (--save-top2-rrng)")]
+	 Description("Write top-two identification candidates to the output RRNG. Requires Save peak ranges txt.  (--save-rrng-with-uncertainty)")]
 	public bool SaveTop2Rrng
 	{
 		get => _saveTop2Rrng;
@@ -211,6 +215,7 @@ void ApplyRunConfig(RangingSettings s, Dictionary<string, string> c)
 	if (c.TryGetValue("training.include_molecules", out v)) s.RangeMolecules = YBool(v);
 	if (c.TryGetValue("guardrails.unknown_flagging.flag_unknowns", out v)) s.FlagUnknowns = YBool(v);
 	if (c.TryGetValue("guardrails.unknown_flagging.mc_threshold", out v)) s.McThreshold = YDouble(v);
+	if (c.TryGetValue("guardrails.unknown_flagging.unknown_confidence_threshold", out v)) s.UnknownConfidenceThreshold = YDouble(v);
 	if (c.TryGetValue("guardrails.unknown_molecule_rf.enabled", out v)) s.UnknownMoleculeRf = YBool(v);
 	if (c.TryGetValue("guardrails.unknown_molecule_rf.unknown_molecule_rf_threshold", out v)) s.UnknownMoleculeRfThreshold = YDouble(v);
 	if (c.TryGetValue("guardrails.molecule_rescue.enabled", out v)) s.MoleculeRfRescueElements = YBool(v);
@@ -222,7 +227,7 @@ void ApplyRunConfig(RangingSettings s, Dictionary<string, string> c)
 	if (c.TryGetValue("output_control.progress_min_fraction", out v) && v.ToLowerInvariant() != "null") s.ProgressUpdateFraction = YDouble(v);
 	if (c.TryGetValue("output_control.save_artifacts", out v)) s.SaveArtifacts = YBool(v);
 	if (c.TryGetValue("output_control.save_peak_ranges_txt", out v)) s.SavePeakRangesTxt = YBool(v);
-	if (c.TryGetValue("output_control.save_top2_rrng", out v)) s.SaveTop2Rrng = YBool(v);
+	if (c.TryGetValue("output_control.save_rrng_with_uncertainty", out v)) s.SaveTop2Rrng = YBool(v);
 }
 
 // Serializes the reviewed grid settings into the nested ranging/training/guardrails.* schema,
@@ -241,6 +246,7 @@ string BuildOverrideYaml(RangingSettings s)
 	sb.AppendLine("  unknown_flagging:");
 	sb.AppendLine($"    flag_unknowns: {YamlBool(s.FlagUnknowns)}");
 	sb.AppendLine($"    mc_threshold: {Num(s.McThreshold)}");
+	sb.AppendLine($"    unknown_confidence_threshold: {Num(s.UnknownConfidenceThreshold)}");
 	sb.AppendLine("  context_rescore:");
 	sb.AppendLine($"    enabled: {YamlBool(s.ContextRescore)}");
 	sb.AppendLine("  molecule_rescue:");
@@ -351,7 +357,7 @@ var args = new List<string>
 	"--output-rrng", rngPath,
 	Flag("save-artifacts", s.SaveArtifacts),
 	Flag("save-peak-ranges-txt", s.SavePeakRangesTxt),
-	Flag("save-top2-rrng", s.SaveTop2Rrng),
+	Flag("save-rrng-with-uncertainty", s.SaveTop2Rrng),
 };
 if (s.ProgressUpdateFraction > 0)   // 0 => omit, tool keeps its continuous default
 {
