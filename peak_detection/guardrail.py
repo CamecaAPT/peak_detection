@@ -409,7 +409,6 @@ def context_rescore_peaks(
             })
 
         if context_override_rows:
-            print(f"  Context RF rescoring overrides applied: {len(context_override_rows)}/{considered} candidates")
             _ctx_dir = artifacts_dir or prefix
             os.makedirs(_ctx_dir, exist_ok=True)
             context_overrides_path = os.path.join(_ctx_dir, f"{prefix}_context_rescore_overrides.csv")

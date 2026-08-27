@@ -38,17 +38,17 @@ from peak_detection.registry.config import load_merged_config, write_effective_c
 CONFIGS_DIR = os.path.join(current_dir, "configs")
 from peak_detection.plotting import (
     plot_yolo_comparison,
-    plot_rf_accuracy_summary,
-    plot_rf_counts_summary,
-    plot_rf_species_counts_with_unknowns_summary,
-    plot_rf_element_counts_summary,
-    plot_rf_molecule_counts_summary,
-    plot_rf_element_counts_excluding_unknowns_summary,
-    plot_rf_molecule_counts_excluding_unknowns_summary,
-    plot_rf_element_accuracy_pct_summary,
-    plot_rf_molecule_accuracy_pct_summary,
-    plot_rf_element_accuracy_pct_including_unknowns_summary,
-    plot_rf_molecule_accuracy_pct_including_unknowns_summary,
+    plot_accuracy_summary,
+    plot_counts_summary,
+    plot_species_counts_with_unknowns_summary,
+    plot_element_counts_summary,
+    plot_molecule_counts_summary,
+    plot_element_counts_excluding_unknowns_summary,
+    plot_molecule_counts_excluding_unknowns_summary,
+    plot_element_accuracy_pct_summary,
+    plot_molecule_accuracy_pct_summary,
+    plot_element_accuracy_pct_including_unknowns_summary,
+    plot_molecule_accuracy_pct_including_unknowns_summary,
     plot_yolo_metrics_summary,
 )
 
@@ -71,13 +71,14 @@ def _default_output_dir(apt_file):
     return re.sub(r'_+', '_', name)
 
 
-def _extract_rf_counts(counts: dict) -> dict:
+def _extract_counts(counts: dict) -> dict:
     """Pull species/elemental/molecular total+correct counts out of an
-    rf_accuracy_breakdown['counts']-shaped dict, for both the including- and
-    excluding-unknowns scopes. Molecular counts are derived from species - elemental
-    when not reported directly. Keys returned (no 'rf_' prefix, '_exc' suffix for the
-    excluding-unknowns scope): species_total, species_correct, elemental_total,
-    elemental_correct, molecular_total, molecular_correct (and their '_exc' variants).
+    accuracy_breakdown['counts']-shaped dict (any registered model's breakdown, not
+    RF-specific), for both the including- and excluding-unknowns scopes. Molecular counts
+    are derived from species - elemental when not reported directly. Keys returned
+    ('_exc' suffix for the excluding-unknowns scope): species_total, species_correct,
+    elemental_total, elemental_correct, molecular_total, molecular_correct (and their
+    '_exc' variants).
     """
     def g(key):
         return int(counts.get(key, 0) or 0)
@@ -102,28 +103,6 @@ def _extract_rf_counts(counts: dict) -> dict:
         result[f'molecular_total{suffix}'] = molecular_total
         result[f'molecular_correct{suffix}'] = molecular_correct
     return result
-
-
-def _print_rf_accuracy_line(label, key, breakdown, counts):
-    """Print one 'RF Accuracy (<label>): X% (c/t) including unknowns, Y% (c/t) excluding unknowns' line."""
-    print(
-        f"  RF Accuracy ({label}): "
-        f"{breakdown.get(f'{key}_including_unknowns', 0.0):.1f}% "
-        f"({counts.get(f'{key}_correct_including_unknowns', 0)}/{counts.get(f'{key}_total_including_unknowns', 0)}) including unknowns, "
-        f"{breakdown.get(f'{key}_excluding_unknowns', 0.0):.1f}% "
-        f"({counts.get(f'{key}_correct_excluding_unknowns', 0)}/{counts.get(f'{key}_total_excluding_unknowns', 0)}) excluding unknowns"
-    )
-
-
-def _print_rescue_impact_line(label, key, before, after, before_counts, after_counts, suffix=''):
-    """Print one 'Molecule rescue impact (excluding unknowns): <label> X% (c/t) -> Y% (c/t)' line."""
-    print(
-        f"  Molecule rescue impact (excluding unknowns): "
-        f"{label} {before.get(f'{key}_excluding_unknowns', 0.0):.1f}% "
-        f"({before_counts.get(f'{key}_correct_excluding_unknowns', 0)}/{before_counts.get(f'{key}_total_excluding_unknowns', 0)}) -> "
-        f"{after.get(f'{key}_excluding_unknowns', 0.0):.1f}% "
-        f"({after_counts.get(f'{key}_correct_excluding_unknowns', 0)}/{after_counts.get(f'{key}_total_excluding_unknowns', 0)}){suffix}"
-    )
 
 
 def process_dataset(
@@ -254,28 +233,6 @@ def process_dataset(
     rf_accuracy_ele = float(rf_accuracy_breakdown.get('elemental_excluding_unknowns', 0.0)) if rf_accuracy_breakdown else 0.0
     unknown_count = sum(1 for p in all_predicted if getattr(p, 'is_unknown', False))
 
-    # --- RF ACCURACY OUTPUT ---
-    if rf_accuracy_breakdown and 'counts' in rf_accuracy_breakdown:
-        c = rf_accuracy_breakdown['counts']
-        _print_rf_accuracy_line('All species', 'species', rf_accuracy_breakdown, c)
-        _print_rf_accuracy_line('Elemental only', 'elemental', rf_accuracy_breakdown, c)
-        if 'molecular_excluding_unknowns' in rf_accuracy_breakdown:
-            _print_rf_accuracy_line('Molecular only', 'molecular', rf_accuracy_breakdown, c)
-
-        if 'before_rescue' in rf_accuracy_breakdown and 'after_rescue' in rf_accuracy_breakdown:
-            b = rf_accuracy_breakdown['before_rescue']
-            a = rf_accuracy_breakdown['after_rescue']
-            bc = b.get('counts', {}) or {}
-            ac = a.get('counts', {}) or {}
-            rs = rf_accuracy_breakdown.get('rescue', {}) or {}
-            _print_rescue_impact_line('species', 'species', b, a, bc, ac,
-                                       suffix=f"; overrides {rs.get('overrides', 0)}/{rs.get('considered', 0)}")
-            _print_rescue_impact_line('elements', 'elemental', b, a, bc, ac)
-            _print_rescue_impact_line('molecules', 'molecular', b, a, bc, ac)
-    else:
-        print(f"  RF Accuracy (All species): {rf_accuracy:.1f}%")
-        print(f"  RF Accuracy (Elemental only): {rf_accuracy_ele:.1f}%")
-
     accuracy_counts = {
         'species_total': 0, 'species_correct': 0,
         'elemental_total': 0, 'elemental_correct': 0,
@@ -283,36 +240,14 @@ def process_dataset(
         'species_total_exc': 0, 'species_correct_exc': 0,
         'elemental_total_exc': 0, 'elemental_correct_exc': 0,
         'molecular_total_exc': 0, 'molecular_correct_exc': 0,
-        'species_total_before': 0, 'species_correct_before': 0,
-        'elemental_total_before': 0, 'elemental_correct_before': 0,
-        'molecular_total_before': 0, 'molecular_correct_before': 0,
-        'species_total_before_exc': 0, 'species_correct_before_exc': 0,
-        'elemental_total_before_exc': 0, 'elemental_correct_before_exc': 0,
-        'molecular_total_before_exc': 0, 'molecular_correct_before_exc': 0,
     }
-    molecule_rescue_considered = 0
-    molecule_rescue_overrides = 0
-    molecule_rescue_mixed_candidates = 0
     if rf_accuracy_breakdown and 'counts' in rf_accuracy_breakdown:
-        c = rf_accuracy_breakdown.get('counts', {}) or {}
-        accuracy_counts.update(_extract_rf_counts(c))
-
-        if 'before_rescue' in rf_accuracy_breakdown and 'after_rescue' in rf_accuracy_breakdown:
-            bc = (rf_accuracy_breakdown.get('before_rescue', {}) or {}).get('counts', {}) or {}
-            for k, v in _extract_rf_counts(bc).items():
-                key = f'{k[:-4]}_before_exc' if k.endswith('_exc') else f'{k}_before'
-                accuracy_counts[key] = v
-
-            rs = rf_accuracy_breakdown.get('rescue', {}) or {}
-            molecule_rescue_considered = int(rs.get('considered', 0) or 0)
-            molecule_rescue_overrides = int(rs.get('overrides', 0) or 0)
-            molecule_rescue_mixed_candidates = int(rs.get('mixed_candidates', 0) or 0)
+        accuracy_counts.update(_extract_counts(rf_accuracy_breakdown.get('counts', {}) or {}))
 
     detected1 = all_predicted
 
     # --- ACCURACY ASSESSMENT ---
     pc, rc, f1c = calculate_iou_metrics(truth, all_predicted)
-    print(f"  Total Combined Metrics: Precision={pc:.3f}, Recall={rc:.3f}, F1={f1c:.3f}")
 
     # Calculate final found peaks (TP)
     tp_count = 0
@@ -369,9 +304,6 @@ def process_dataset(
         species_accuracy=round(rf_accuracy, 2),
         elemental_accuracy=round(rf_accuracy_ele, 2),
         **accuracy_counts,
-        molecule_rescue_considered=molecule_rescue_considered,
-        molecule_rescue_overrides=molecule_rescue_overrides,
-        molecule_rescue_mixed_candidates=molecule_rescue_mixed_candidates,
         unknown_count=unknown_count,
         unknown_count_with_truth=unknown_with_truth,
         unknown_count_no_truth=unknown_no_truth,
@@ -382,6 +314,7 @@ def process_dataset(
         x=x,
         spectrum=y_mapped,
         truth=truth,
+        extras=ctx.diagnostics,
     )
 
     # --- SAVE PEAK RANGES ---
@@ -591,6 +524,8 @@ def main():
             # Save global summary statistics to CSV (into the run output directory)
             summary_file = os.path.join(out_base, "peak_detection_summary.csv")
             if args.save_csv:
+                # Universal fields only: every registered model populates these the same
+                # way, so this file is safe to compare across --model runs.
                 fieldnames = [
                     'dataset', 'config', 'true_peaks_count', 'predicted_peaks_count',
                     'found_peaks_count', 'precision', 'recall', 'f1',
@@ -602,13 +537,6 @@ def main():
                     'species_total_exc', 'species_correct_exc',
                     'elemental_total_exc', 'elemental_correct_exc',
                     'molecular_total_exc', 'molecular_correct_exc',
-                    'species_total_before', 'species_correct_before',
-                    'elemental_total_before', 'elemental_correct_before',
-                    'molecular_total_before', 'molecular_correct_before',
-                    'species_total_before_exc', 'species_correct_before_exc',
-                    'elemental_total_before_exc', 'elemental_correct_before_exc',
-                    'molecular_total_before_exc', 'molecular_correct_before_exc',
-                    'molecule_rescue_considered', 'molecule_rescue_overrides', 'molecule_rescue_mixed_candidates',
                     'unknown_count', 'unknown_count_with_truth', 'unknown_count_no_truth',
                     'predicted_peaks_with_truth', 'predicted_peaks_no_truth',
                 ]
@@ -619,6 +547,23 @@ def main():
                         csv_row = {k: getattr(row, k) for k in fieldnames}
                         writer.writerow(csv_row)
 
+                # Per-approach diagnostics: only written when at least one dataset's
+                # pipeline populated ctx.diagnostics (today: RF's before-rescue snapshot).
+                # Each row is the universal row plus that approach's own extra columns —
+                # a standalone file, not requiring a join against peak_detection_summary.csv.
+                diagnostics_rows = [s for s in all_stats if s.extras is not None]
+                if diagnostics_rows:
+                    diagnostics_file = os.path.join(out_base, f"{args.model}_diagnostics.csv")
+                    extras_fieldnames = list(diagnostics_rows[0].extras.to_row().keys())
+                    with open(diagnostics_file, 'w', newline='') as f:
+                        writer = csv.DictWriter(f, fieldnames=fieldnames + extras_fieldnames)
+                        writer.writeheader()
+                        for row in diagnostics_rows:
+                            csv_row = {k: getattr(row, k) for k in fieldnames}
+                            csv_row.update(row.extras.to_row())
+                            writer.writerow(csv_row)
+                    print(f"Per-approach diagnostics saved to {diagnostics_file}")
+
                 if write_dataset_peak_summaries is not None:
                     try:
                         written_peak_summaries = write_dataset_peak_summaries(Path(out_base))
@@ -627,44 +572,6 @@ def main():
                         print(f"  [Warn] Failed writing per-dataset peak summaries ({e})")
                 else:
                     print("  [Warn] write_dataset_peak_summaries module not available; skipping per-dataset summaries")
-
-            # If molecule rescue was enabled, print an overall before/after summary (excluding unknowns).
-            if any(int(getattr(s, 'molecule_rescue_considered', 0) or 0) > 0 for s in all_stats):
-                def _sum_before_after(total_after_key: str, correct_after_key: str, total_before_key: str, correct_before_key: str):
-                    bt = bc = at = ac = 0
-                    for s in all_stats:
-                        at_i = int(getattr(s, total_after_key, 0) or 0)
-                        ac_i = int(getattr(s, correct_after_key, 0) or 0)
-                        bt_i = int(getattr(s, total_before_key, 0) or 0)
-                        bc_i = int(getattr(s, correct_before_key, 0) or 0)
-                        # If before wasn't populated (e.g. no rescue candidates), treat before == after.
-                        if bt_i == 0 and at_i > 0:
-                            bt_i, bc_i = at_i, ac_i
-                        bt += bt_i
-                        bc += bc_i
-                        at += at_i
-                        ac += ac_i
-                    bp = (bc / bt * 100.0) if bt > 0 else 0.0
-                    ap = (ac / at * 100.0) if at > 0 else 0.0
-                    return (bc, bt, bp), (ac, at, ap)
-
-                (bc_s, bt_s, bp_s), (ac_s, at_s, ap_s) = _sum_before_after(
-                    'species_total_exc', 'species_correct_exc', 'species_total_before_exc', 'species_correct_before_exc'
-                )
-                (bc_e, bt_e, bp_e), (ac_e, at_e, ap_e) = _sum_before_after(
-                    'elemental_total_exc', 'elemental_correct_exc', 'elemental_total_before_exc', 'elemental_correct_before_exc'
-                )
-                (bc_m, bt_m, bp_m), (ac_m, at_m, ap_m) = _sum_before_after(
-                    'molecular_total_exc', 'molecular_correct_exc', 'molecular_total_before_exc', 'molecular_correct_before_exc'
-                )
-                overrides = sum(int(getattr(s, 'molecule_rescue_overrides', 0) or 0) for s in all_stats)
-                mixed = sum(int(getattr(s, 'molecule_rescue_mixed_candidates', 0) or 0) for s in all_stats)
-                considered = sum(int(getattr(s, 'molecule_rescue_considered', 0) or 0) for s in all_stats)
-                print("\n==================== MOLECULE RESCUE SUMMARY (EXCLUDING UNKNOWNS) ====================")
-                print(f"  Overall species: {bc_s}/{bt_s} ({bp_s:.1f}%) -> {ac_s}/{at_s} ({ap_s:.1f}%)")
-                print(f"  Elemental only:  {bc_e}/{bt_e} ({bp_e:.1f}%) -> {ac_e}/{at_e} ({ap_e:.1f}%)")
-                print(f"  Molecular only:  {bc_m}/{bt_m} ({bp_m:.1f}%) -> {ac_m}/{at_m} ({ap_m:.1f}%)")
-                print(f"  Rescue accepted: {overrides} overrides, {mixed} mixed candidates / {considered} candidates\n")
 
             # Aggregate identifications for YOLO model
             if args.save_csv:
@@ -688,23 +595,24 @@ def main():
                             writer.writerow(row)
                     print(f"Global YOLO Identifications saved to {id_file}")
 
-            # Generate summary plots (into the run output directory)
-            summary_plots = [
-                (plot_rf_accuracy_summary, "rf_accuracy_vs_dataset.png"),
-                (plot_rf_counts_summary, "rf_counts_vs_dataset.png"),
-                (plot_rf_species_counts_with_unknowns_summary, "rf_species_counts_with_unknowns_vs_dataset.png"),
-                (plot_rf_element_counts_summary, "rf_element_counts_vs_dataset.png"),
-                (plot_rf_molecule_counts_summary, "rf_molecule_counts_vs_dataset.png"),
-                (plot_rf_element_counts_excluding_unknowns_summary, "rf_element_counts_excluding_unknowns_vs_dataset.png"),
-                (plot_rf_molecule_counts_excluding_unknowns_summary, "rf_molecule_counts_excluding_unknowns_vs_dataset.png"),
-                (plot_rf_element_accuracy_pct_summary, "rf_element_accuracy_pct_vs_dataset.png"),
-                (plot_rf_molecule_accuracy_pct_summary, "rf_molecule_accuracy_pct_vs_dataset.png"),
-                (plot_rf_element_accuracy_pct_including_unknowns_summary, "rf_element_accuracy_pct_including_unknowns_vs_dataset.png"),
-                (plot_rf_molecule_accuracy_pct_including_unknowns_summary, "rf_molecule_accuracy_pct_including_unknowns_vs_dataset.png"),
-                (plot_yolo_metrics_summary, "yolo_metrics_vs_dataset.png"),
+            # Generate summary plots (into the run output directory). Each plot function
+            # derives its own filename as "{model_label}_<suffix>_vs_dataset.png".
+            summary_plot_fns = [
+                plot_accuracy_summary,
+                plot_counts_summary,
+                plot_species_counts_with_unknowns_summary,
+                plot_element_counts_summary,
+                plot_molecule_counts_summary,
+                plot_element_counts_excluding_unknowns_summary,
+                plot_molecule_counts_excluding_unknowns_summary,
+                plot_element_accuracy_pct_summary,
+                plot_molecule_accuracy_pct_summary,
+                plot_element_accuracy_pct_including_unknowns_summary,
+                plot_molecule_accuracy_pct_including_unknowns_summary,
             ]
-            for plot_fn, plot_name in summary_plots:
-                plot_fn(all_stats, output_path=os.path.join(out_base, plot_name))
+            for plot_fn in summary_plot_fns:
+                plot_fn(all_stats, output_dir=out_base, model_label=args.model)
+            plot_yolo_metrics_summary(all_stats, output_path=os.path.join(out_base, "yolo_metrics_vs_dataset.png"))
 
             if args.save_csv:
                 print(f"\nBatch Processing Complete. Summary saved to {summary_file}")

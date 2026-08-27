@@ -9,6 +9,7 @@ matplotlib on callers that don't plot anything.
 
 from __future__ import annotations
 
+import os
 import re
 
 import numpy as np
@@ -156,7 +157,7 @@ def _plot_summary_series(
     model_label=None,
 ):
     """
-    Shared per-dataset line-plot renderer used by the plot_rf_*/plot_yolo_metrics_summary
+    Shared per-dataset line-plot renderer used by the plot_*_summary/plot_yolo_metrics_summary
     functions below. ``stats`` must already be sorted by dataset name.
 
     ``primary_series``/``secondary_series`` are lists of dicts with keys ``values``, ``color``,
@@ -218,7 +219,7 @@ def _plot_summary_series(
     plt.close('all')
 
 
-def plot_rf_accuracy_summary(all_stats, output_path="rf_accuracy_vs_dataset.png", model_label=None):
+def plot_accuracy_summary(all_stats, output_dir=".", model_label=None):
     """Generates a summary plot for identification accuracy across datasets."""
     if not all_stats:
         return
@@ -228,6 +229,7 @@ def plot_rf_accuracy_summary(all_stats, output_path="rf_accuracy_vs_dataset.png"
     unk_frac_truth = [(getattr(s, 'unknown_count_with_truth', 0) or 0) / (s.predicted_peaks_count or 1) for s in stats]
     unk_frac_no_truth = [(getattr(s, 'unknown_count_no_truth', 0) or 0) / (s.predicted_peaks_count or 1) for s in stats]
 
+    output_path = os.path.join(output_dir, f"{model_label or 'model'}_accuracy_vs_dataset.png")
     _plot_summary_series(
         stats, output_path,
         title='Identification Accuracy and Unknown Peak Fraction (Truth-Matched vs Unmatched)',
@@ -248,7 +250,7 @@ def plot_rf_accuracy_summary(all_stats, output_path="rf_accuracy_vs_dataset.png"
     )
 
 
-def plot_rf_counts_summary(all_stats, output_path="rf_counts_vs_dataset.png", model_label=None):
+def plot_counts_summary(all_stats, output_dir=".", model_label=None):
     """Plot classification totals/correct counts across datasets (elemental-only and overall species)."""
     if not all_stats:
         return
@@ -258,6 +260,7 @@ def plot_rf_counts_summary(all_stats, output_path="rf_counts_vs_dataset.png", mo
     true_all = [int(getattr(s, 'species_total', 0) or 0) for s in stats]
     corr_all = [int(getattr(s, 'species_correct', 0) or 0) for s in stats]
 
+    output_path = os.path.join(output_dir, f"{model_label or 'model'}_counts_vs_dataset.png")
     _plot_summary_series(
         stats, output_path,
         title='Classification Counts (True vs Correct)',
@@ -273,7 +276,7 @@ def plot_rf_counts_summary(all_stats, output_path="rf_counts_vs_dataset.png", mo
     )
 
 
-def plot_rf_species_counts_with_unknowns_summary(all_stats, output_path="rf_species_counts_with_unknowns_vs_dataset.png", model_label=None):
+def plot_species_counts_with_unknowns_summary(all_stats, output_dir=".", model_label=None):
     """
     Plot overall (elements+molecules) evaluation counts across datasets:
       - total evaluated species (truth-matched peaks)
@@ -289,6 +292,7 @@ def plot_rf_species_counts_with_unknowns_summary(all_stats, output_path="rf_spec
     unknown_with_truth = [int(getattr(s, 'unknown_count_with_truth', 0) or 0) for s in stats]
     unknown_no_truth = [int(getattr(s, 'unknown_count_no_truth', 0) or 0) for s in stats]
 
+    output_path = os.path.join(output_dir, f"{model_label or 'model'}_species_counts_with_unknowns_vs_dataset.png")
     _plot_summary_series(
         stats, output_path,
         title='Overall Species Counts (Total vs Correct vs Unknown, Split by Truth Match)',
@@ -325,7 +329,7 @@ def _annotate_count_percentages(ax, display_names, correct_counts, total_counts,
         )
 
 
-def plot_rf_element_counts_summary(all_stats, output_path="rf_element_counts_vs_dataset.png", model_label=None):
+def plot_element_counts_summary(all_stats, output_dir=".", model_label=None):
     """Plot elemental-only true/correct counts including unknowns across datasets."""
     if not all_stats:
         return
@@ -340,6 +344,7 @@ def plot_rf_element_counts_summary(all_stats, output_path="rf_element_counts_vs_
     total_acc = (total_correct / total_true * 100.0) if total_true else 0.0
     main_ymax = max(true_ele + corr_ele + [1])
 
+    output_path = os.path.join(output_dir, f"{model_label or 'model'}_element_counts_vs_dataset.png")
     _plot_summary_series(
         stats, output_path,
         title=f'Elemental Classification Counts Including Unknowns (Total Correct: {total_correct}/{total_true}, {total_acc:.1f}%)',
@@ -360,7 +365,7 @@ def plot_rf_element_counts_summary(all_stats, output_path="rf_element_counts_vs_
     )
 
 
-def plot_rf_molecule_counts_summary(all_stats, output_path="rf_molecule_counts_vs_dataset.png", model_label=None):
+def plot_molecule_counts_summary(all_stats, output_dir=".", model_label=None):
     """Plot molecule-only true/correct counts including unknowns across datasets."""
     if not all_stats:
         return
@@ -375,6 +380,7 @@ def plot_rf_molecule_counts_summary(all_stats, output_path="rf_molecule_counts_v
     total_acc = (total_correct / total_true * 100.0) if total_true else 0.0
     main_ymax = max(true_mol + corr_mol + [1])
 
+    output_path = os.path.join(output_dir, f"{model_label or 'model'}_molecule_counts_vs_dataset.png")
     _plot_summary_series(
         stats, output_path,
         title=f'Molecular Classification Counts Including Unknowns (Total Correct: {total_correct}/{total_true}, {total_acc:.1f}%)',
@@ -395,9 +401,9 @@ def plot_rf_molecule_counts_summary(all_stats, output_path="rf_molecule_counts_v
     )
 
 
-def plot_rf_element_counts_excluding_unknowns_summary(
+def plot_element_counts_excluding_unknowns_summary(
     all_stats,
-    output_path="rf_element_counts_excluding_unknowns_vs_dataset.png",
+    output_dir=".",
     model_label=None,
 ):
     """Plot elemental-only true/correct counts excluding unknowns across datasets."""
@@ -414,6 +420,7 @@ def plot_rf_element_counts_excluding_unknowns_summary(
     total_acc = (total_correct / total_true * 100.0) if total_true else 0.0
     main_ymax = max(true_ele + corr_ele + [1])
 
+    output_path = os.path.join(output_dir, f"{model_label or 'model'}_element_counts_excluding_unknowns_vs_dataset.png")
     _plot_summary_series(
         stats, output_path,
         title=f'Elemental Classification Counts Excluding Unknowns (Total Correct: {total_correct}/{total_true}, {total_acc:.1f}%)',
@@ -434,9 +441,9 @@ def plot_rf_element_counts_excluding_unknowns_summary(
     )
 
 
-def plot_rf_molecule_counts_excluding_unknowns_summary(
+def plot_molecule_counts_excluding_unknowns_summary(
     all_stats,
-    output_path="rf_molecule_counts_excluding_unknowns_vs_dataset.png",
+    output_dir=".",
     model_label=None,
 ):
     """Plot molecule-only true/correct counts excluding unknowns across datasets."""
@@ -453,6 +460,7 @@ def plot_rf_molecule_counts_excluding_unknowns_summary(
     total_acc = (total_correct / total_true * 100.0) if total_true else 0.0
     main_ymax = max(true_mol + corr_mol + [1])
 
+    output_path = os.path.join(output_dir, f"{model_label or 'model'}_molecule_counts_excluding_unknowns_vs_dataset.png")
     _plot_summary_series(
         stats, output_path,
         title=f'Molecular Classification Counts Excluding Unknowns (Total Correct: {total_correct}/{total_true}, {total_acc:.1f}%)',
@@ -479,8 +487,8 @@ def _mean_where_gated(values, gates):
     return float(np.mean(filtered)) if filtered else 0.0
 
 
-def _rf_accuracy_pct_series(stats, total_key, correct_key, total_inc_key=None):
-    """Shared data prep for the plot_rf_*_accuracy_pct_* functions below.
+def _accuracy_pct_series(stats, total_key, correct_key, total_inc_key=None):
+    """Shared data prep for the plot_*_accuracy_pct_* functions below.
 
     Returns (pct, avg_pct, unk_frac_truth, avg_unk_truth, unk_frac_extra, avg_unk_extra) where
     `pct` is correct/total*100 using `correct_key`/`total_key`, and the unknown fractions compare
@@ -504,10 +512,10 @@ def _rf_accuracy_pct_series(stats, total_key, correct_key, total_inc_key=None):
     )
 
 
-def _plot_rf_accuracy_pct_summary(stats, output_path, title, species_label, color, pct_label,
-                                   total_key, correct_key, total_inc_key=None, log_label='', model_label=None):
-    """Shared renderer for the 4 plot_rf_*_accuracy_pct_* functions below."""
-    pct, avg_pct, unk_frac_truth, avg_unk_truth, unk_frac_extra, avg_unk_extra = _rf_accuracy_pct_series(
+def _plot_accuracy_pct_summary(stats, output_path, title, species_label, color, pct_label,
+                                total_key, correct_key, total_inc_key=None, log_label='', model_label=None):
+    """Shared renderer for the 4 plot_*_accuracy_pct_* functions below."""
+    pct, avg_pct, unk_frac_truth, avg_unk_truth, unk_frac_extra, avg_unk_extra = _accuracy_pct_series(
         stats, total_key, correct_key, total_inc_key
     )
     _plot_summary_series(
@@ -527,7 +535,7 @@ def _plot_rf_accuracy_pct_summary(stats, output_path, title, species_label, colo
     )
 
 
-def plot_rf_element_accuracy_pct_summary(all_stats, output_path="rf_element_accuracy_pct_vs_dataset.png", model_label=None):
+def plot_element_accuracy_pct_summary(all_stats, output_dir=".", model_label=None):
     """
     Plot elemental-only correctness percentage across datasets (correct/true * 100),
     excluding unknown predictions from the denominator. Also overlays unknown fraction.
@@ -535,7 +543,8 @@ def plot_rf_element_accuracy_pct_summary(all_stats, output_path="rf_element_accu
     if not all_stats:
         return
     stats = sorted(all_stats, key=lambda x: x.dataset)
-    _plot_rf_accuracy_pct_summary(
+    output_path = os.path.join(output_dir, f"{model_label or 'model'}_element_accuracy_pct_vs_dataset.png")
+    _plot_accuracy_pct_summary(
         stats, output_path,
         title='Elemental Classification Accuracy (Excluding Unknowns)',
         species_label='Element', color='navy', pct_label='Elemental correct (%)',
@@ -546,7 +555,7 @@ def plot_rf_element_accuracy_pct_summary(all_stats, output_path="rf_element_accu
     )
 
 
-def plot_rf_molecule_accuracy_pct_summary(all_stats, output_path="rf_molecule_accuracy_pct_vs_dataset.png", model_label=None):
+def plot_molecule_accuracy_pct_summary(all_stats, output_dir=".", model_label=None):
     """
     Plot molecule-only correctness percentage across datasets (correct/true * 100),
     excluding unknown predictions from the denominator. Also overlays unknown fraction.
@@ -554,7 +563,8 @@ def plot_rf_molecule_accuracy_pct_summary(all_stats, output_path="rf_molecule_ac
     if not all_stats:
         return
     stats = sorted(all_stats, key=lambda x: x.dataset)
-    _plot_rf_accuracy_pct_summary(
+    output_path = os.path.join(output_dir, f"{model_label or 'model'}_molecule_accuracy_pct_vs_dataset.png")
+    _plot_accuracy_pct_summary(
         stats, output_path,
         title='Molecular Classification Accuracy (Excluding Unknowns)',
         species_label='Molecule', color='purple', pct_label='Molecular correct (%)',
@@ -565,9 +575,9 @@ def plot_rf_molecule_accuracy_pct_summary(all_stats, output_path="rf_molecule_ac
     )
 
 
-def plot_rf_element_accuracy_pct_including_unknowns_summary(
+def plot_element_accuracy_pct_including_unknowns_summary(
     all_stats,
-    output_path="rf_element_accuracy_pct_including_unknowns_vs_dataset.png",
+    output_dir=".",
     model_label=None,
 ):
     """
@@ -577,7 +587,8 @@ def plot_rf_element_accuracy_pct_including_unknowns_summary(
     if not all_stats:
         return
     stats = sorted(all_stats, key=lambda x: x.dataset)
-    _plot_rf_accuracy_pct_summary(
+    output_path = os.path.join(output_dir, f"{model_label or 'model'}_element_accuracy_pct_including_unknowns_vs_dataset.png")
+    _plot_accuracy_pct_summary(
         stats, output_path,
         title='Elemental Classification Accuracy (Including Unknowns)',
         species_label='Element', color='navy', pct_label='Elemental correct incl. unknowns (%)',
@@ -587,9 +598,9 @@ def plot_rf_element_accuracy_pct_including_unknowns_summary(
     )
 
 
-def plot_rf_molecule_accuracy_pct_including_unknowns_summary(
+def plot_molecule_accuracy_pct_including_unknowns_summary(
     all_stats,
-    output_path="rf_molecule_accuracy_pct_including_unknowns_vs_dataset.png",
+    output_dir=".",
     model_label=None,
 ):
     """
@@ -599,7 +610,8 @@ def plot_rf_molecule_accuracy_pct_including_unknowns_summary(
     if not all_stats:
         return
     stats = sorted(all_stats, key=lambda x: x.dataset)
-    _plot_rf_accuracy_pct_summary(
+    output_path = os.path.join(output_dir, f"{model_label or 'model'}_molecule_accuracy_pct_including_unknowns_vs_dataset.png")
+    _plot_accuracy_pct_summary(
         stats, output_path,
         title='Molecular Classification Accuracy (Including Unknowns)',
         species_label='Molecule', color='purple', pct_label='Molecular correct incl. unknowns (%)',

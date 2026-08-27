@@ -24,6 +24,11 @@ class ClassifierContext:
     ``cfg`` is a FLAT, model-specific kwargs dict — each entry point script builds it via
     that model's own flattener function (e.g. RF's ``flat_rf_kwargs()``), not a generic
     nested-to-flat conversion.
+
+    ``diagnostics`` is an optional out-param, same pattern as ``peaks``: a pipeline that has
+    its own internal staging worth recording (e.g. RF's before/after molecule-rescue
+    snapshot) sets it during ``run()``; the entry-point script reads it back afterward to
+    populate ``DatasetStats.extras``. None for pipelines with no equivalent internal stage.
     """
     apt_file: str
     rrng_file: str | None
@@ -38,6 +43,7 @@ class ClassifierContext:
     species_list: list[str] | None = None
     elements_list: list[str] | None = None
     peaks: list[PeakRange] = field(default_factory=list)
+    diagnostics: object | None = None
 
 
 class ClassifierPipeline(ABC):

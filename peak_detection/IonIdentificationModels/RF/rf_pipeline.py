@@ -28,6 +28,7 @@ from ...utils import is_molecule, simplify_label, yaml_safe
 from ...yolo_detection import run_yolo_ranging
 from ... import guardrail
 from . import molecule_rescue
+from .rescue_diagnostics import RFRescueDiagnostics
 from .rf_model import create_RF_model, run_RF_model
 
 
@@ -168,6 +169,7 @@ class RFClassifierPipeline(ClassifierPipeline):
         before_rescue_breakdown = None
         after_rescue_breakdown = None
         rescue_stats = {'considered': 0, 'overrides': 0, 'mixed_candidates': 0}
+        rescue_ran = False
         mc_samples_by_species: dict = {}
 
         try:
@@ -248,16 +250,8 @@ class RFClassifierPipeline(ClassifierPipeline):
                     eff_neighbor_threshold=eff_neighbor_threshold, use_signature=use_signature,
                     run_rf_model_fn=_timed_run_RF_model,
                 )
+                rescue_ran = True
 
-            mixed_unknown_count = guardrail.flag_high_confidence_mixed_unknowns(
-                peaks, flag_unknowns=kwargs['flag_unknowns'],
-                unknown_mixed_element_molecule_confidence_threshold=kwargs['unknown_mixed_element_molecule_confidence_threshold'],
-            )
-            if mixed_unknown_count:
-                print(
-                    "  High-confidence mixed element/molecule peaks flagged as Unknown: "
-                    f"{mixed_unknown_count} (threshold={float(kwargs['unknown_mixed_element_molecule_confidence_threshold']):.2f})"
-                )
             after_rescue_breakdown = guardrail.compute_accuracy_breakdown(
                 peaks, truth_data, rf_accuracy_top_n=kwargs['rf_accuracy_top_n'])
 
@@ -279,6 +273,7 @@ class RFClassifierPipeline(ClassifierPipeline):
             before_rescue_breakdown = None
             after_rescue_breakdown = None
             rescue_stats = {'considered': 0, 'overrides': 0, 'mixed_candidates': 0}
+            rescue_ran = False
 
         # --- Step 6: accuracy breakdown + CSV writers ---
         detailed_rows = guardrail.write_detailed_results_csv(
@@ -293,10 +288,8 @@ class RFClassifierPipeline(ClassifierPipeline):
             after_rescue_breakdown = guardrail.empty_accuracy_breakdown()
 
         accuracy_breakdown = dict(after_rescue_breakdown)
-        if kwargs['molecule_rf_rescue_elements'] and before_rescue_breakdown is not None:
-            accuracy_breakdown['before_rescue'] = before_rescue_breakdown
-            accuracy_breakdown['after_rescue'] = after_rescue_breakdown
-            accuracy_breakdown['rescue'] = rescue_stats
+        if rescue_ran:
+            ctx.diagnostics = RFRescueDiagnostics.from_breakdown(before_rescue_breakdown, rescue_stats)
 
         # --- Step 8: args snapshot ---
         if ctx.save_artifacts:

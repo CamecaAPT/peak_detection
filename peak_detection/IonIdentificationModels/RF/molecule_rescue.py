@@ -94,8 +94,6 @@ def rescue_unknowns_with_molecule_rf(
         p.detailed_id = det2
         recovered += 1
 
-    if recovered:
-        print(f"  Molecule RF recovered {recovered}/{len(unknown_indices)} unknown peaks.")
 
 
 def rescue_elements_with_molecule_rf(
@@ -242,16 +240,6 @@ def rescue_elements_with_molecule_rf(
             p.method = f"{p.method}+mol-candidate" if p.method else "RF-mol-candidate"
             p.detailed_id = DetailedId(el1=ele_pred, conf1=ele_conf, el2=mol_pred, conf2=mol_conf)
             rescue_stats['mixed_candidates'] += 1
-
-    if rescue_stats['overrides'] or rescue_stats['mixed_candidates']:
-        print(
-            "  Molecule rescue accepted: "
-            f"{rescue_stats['overrides']} overrides, "
-            f"{rescue_stats['mixed_candidates']} mixed candidates / "
-            f"{rescue_stats['considered']} candidates"
-        )
-    else:
-        print(f"  Molecule rescue considered {rescue_stats['considered']} candidates; no accepted rescues")
 
     return rescue_stats, rescue_override_rows
 

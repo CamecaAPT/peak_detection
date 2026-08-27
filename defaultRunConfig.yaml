@@ -23,7 +23,7 @@ guardrails:
     flag_unknowns: true
     mc_threshold: 0.2
     unknown_confidence_threshold: 0.6
-    rf_accuracy_top_n: 1
+    rf_accuracy_top_n: 2
   mixed_unknown:
     unknown_mixed_element_molecule_confidence_threshold: 0.95
   context_rescore:

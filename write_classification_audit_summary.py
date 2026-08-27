@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
 from report_metrics import format_ratio, unknown_truth_element_molecule_split
 
@@ -99,9 +100,29 @@ def match_detailed_row(detailed_by_dataset: dict[str, pd.DataFrame], dataset: st
     return df.loc[idx]
 
 
-def build_summary(results_dir: Path) -> str:
+def load_rf_accuracy_top_n(results_dir: Path) -> int:
+    """Load rf_accuracy_top_n from the newest effective-config artifact."""
+    config_paths = sorted(results_dir.glob("effective_config_*.yaml"))
+    if not config_paths:
+        return 1
+    try:
+        config = yaml.safe_load(config_paths[-1].read_text()) or {}
+        value = config.get("guardrails", {}).get("unknown_flagging", {}).get("rf_accuracy_top_n", 1)
+        return max(1, int(value))
+    except (OSError, TypeError, ValueError, yaml.YAMLError):
+        return 1
+
+
+def build_summary(results_dir: Path, rf_accuracy_top_n: int | None = None) -> str:
+    rf_accuracy_top_n = max(1, int(rf_accuracy_top_n or load_rf_accuracy_top_n(results_dir)))
     summary_csv = results_dir / "peak_detection_summary.csv"
     summary_df = pd.read_csv(summary_csv) if summary_csv.exists() else pd.DataFrame()
+    diagnostics_files = sorted(results_dir.glob("*_diagnostics.csv"))
+    diag_df = (
+        pd.concat([pd.read_csv(path) for path in diagnostics_files], ignore_index=True)
+        if diagnostics_files
+        else pd.DataFrame()
+    )
     detailed_files = sorted(results_dir.glob("*/*_detailed_results.csv"))
     detailed_by_dataset = {
         dataset_from_path(path, "_detailed_results.csv"): pd.read_csv(path)
@@ -125,7 +146,7 @@ def build_summary(results_dir: Path) -> str:
                     "top1": labels[0] if labels else "",
                     "top2": labels[1] if len(labels) > 1 else "",
                     "correct_top1": labels_match(true_label, labels[0]) if labels else False,
-                    "correct_top2": any(labels_match(true_label, label) for label in labels[:2]),
+                    "correct_top2": any(labels_match(true_label, label) for label in labels[:rf_accuracy_top_n]),
                 }
             )
     pred_df = pd.DataFrame(rows)
@@ -226,6 +247,24 @@ def build_summary(results_dir: Path) -> str:
         "",
         "Step-by-step analysis",
     ]
+    diagnostics_available = not diag_df.empty
+
+    def d(col: str) -> int:
+        return int(diag_df[col].sum()) if col in diag_df.columns else 0
+
+    species_before_correct = d("species_correct_before")
+    species_before_total = d("species_total_before")
+    species_before_correct_exc = d("species_correct_before_exc")
+    species_before_total_exc = d("species_total_before_exc")
+    element_before_correct = d("elemental_correct_before")
+    element_before_total = d("elemental_total_before")
+    element_before_correct_exc = d("elemental_correct_before_exc")
+    element_before_total_exc = d("elemental_total_before_exc")
+    molecule_before_correct = d("molecular_correct_before")
+    molecule_before_total = d("molecular_total_before")
+    molecule_before_correct_exc = d("molecular_correct_before_exc")
+    molecule_before_total_exc = d("molecular_total_before_exc")
+
     if not summary_df.empty:
         def s(col: str) -> int:
             return int(summary_df[col].sum()) if col in summary_df.columns else 0
@@ -235,19 +274,6 @@ def build_summary(results_dir: Path) -> str:
         found_unique = s("found_peaks_count")
         truth_matched_predictions = s("predicted_peaks_with_truth")
         no_truth_predictions = s("predicted_peaks_no_truth")
-
-        species_before_correct = s("species_correct_before")
-        species_before_total = s("species_total_before")
-        species_before_correct_exc = s("species_correct_before_exc")
-        species_before_total_exc = s("species_total_before_exc")
-        element_before_correct = s("elemental_correct_before")
-        element_before_total = s("elemental_total_before")
-        element_before_correct_exc = s("elemental_correct_before_exc")
-        element_before_total_exc = s("elemental_total_before_exc")
-        molecule_before_correct = s("molecular_correct_before")
-        molecule_before_total = s("molecular_total_before")
-        molecule_before_correct_exc = s("molecular_correct_before_exc")
-        molecule_before_total_exc = s("molecular_total_before_exc")
 
         species_after_correct = s("species_correct")
         species_after_total = s("species_total")
@@ -259,7 +285,7 @@ def build_summary(results_dir: Path) -> str:
         element_after_total_exc = s("elemental_total_exc")
         molecule_after_correct = s("molecular_correct")
         molecule_after_total = s("molecular_total")
-        molecule_after_correct_exc = s("molecular_correct_exc")
+        molecule_after_correct_exc = s("molecular_correct_exc") 
         molecule_after_total_exc = s("molecular_total_exc")
 
         lines.extend(
@@ -271,16 +297,29 @@ def build_summary(results_dir: Path) -> str:
                 f"    Predicted peaks matched to a truth range: {format_ratio(truth_matched_predictions, predicted_peaks)}",
                 f"    Predicted peaks with no matched truth: {format_ratio(no_truth_predictions, predicted_peaks)}",
                 "",
-                "  Step 1: RF classification before molecule-rescue mixed assignments.",
-                "    This stage includes the base RF assignment, unknown flagging, molecule RF recovery on unknowns, and context rescoring.",
-                "    A completely raw pre-unknown RF snapshot was not saved in this run.",
-                f"    All species, including unknowns as wrong: {format_ratio(species_before_correct, species_before_total)}",
-                f"    All species, excluding unknown predictions: {format_ratio(species_before_correct_exc, species_before_total_exc)}",
-                f"    Elements, including unknowns as wrong: {format_ratio(element_before_correct, element_before_total)}",
-                f"    Elements, excluding unknown predictions: {format_ratio(element_before_correct_exc, element_before_total_exc)}",
-                f"    Molecules, including unknowns as wrong: {format_ratio(molecule_before_correct, molecule_before_total)}",
-                f"    Molecules, excluding unknown predictions: {format_ratio(molecule_before_correct_exc, molecule_before_total_exc)}",
-                "",
+            ]
+        )
+
+        lines.append("  Step 1: RF classification before molecule-rescue mixed assignments.")
+        if diagnostics_available:
+            lines.extend(
+                [
+                    "    This stage includes the base RF assignment, unknown flagging, molecule RF recovery on unknowns, and context rescoring.",
+                    "    A completely raw pre-unknown RF snapshot was not saved in this run.",
+                    f"    All species, including unknowns as wrong: {format_ratio(species_before_correct, species_before_total)}",
+                    f"    All species, excluding unknown predictions: {format_ratio(species_before_correct_exc, species_before_total_exc)}",
+                    f"    Elements, including unknowns as wrong: {format_ratio(element_before_correct, element_before_total)}",
+                    f"    Elements, excluding unknown predictions: {format_ratio(element_before_correct_exc, element_before_total_exc)}",
+                    f"    Molecules, including unknowns as wrong: {format_ratio(molecule_before_correct, molecule_before_total)}",
+                    f"    Molecules, excluding unknown predictions: {format_ratio(molecule_before_correct_exc, molecule_before_total_exc)}",
+                ]
+            )
+        else:
+            lines.append("    No *_diagnostics.csv found in the results directory, so the before-rescue breakdown could not be added.")
+        lines.append("")
+
+        lines.extend(
+            [
                 "  Step 2: Unknown predictions after RF unknown handling/recovery.",
                 f"    Unknown predictions with matched truth: {unknown_truth_total}",
                 f"      True elements among truth-matched unknowns: {unknown_truth_element}",
@@ -312,25 +351,32 @@ def build_summary(results_dir: Path) -> str:
     lines.append("")
 
     if not summary_df.empty:
-        considered = s("molecule_rescue_considered")
-        overrides = s("molecule_rescue_overrides")
-        mixed_candidates = s("molecule_rescue_mixed_candidates")
+        lines.append("  Step 4: Molecule rescue on element-labeled peaks.")
+        if diagnostics_available:
+            considered = d("molecule_rescue_considered")
+            overrides = d("molecule_rescue_overrides")
+            mixed_candidates = d("molecule_rescue_mixed_candidates")
+            lines.extend(
+                [
+                    f"    Element-labeled peaks considered by molecule-only RF rescue: {considered}",
+                    f"    Accepted hard molecule overrides: {overrides}",
+                    f"    Accepted mixed element/molecule candidates: {mixed_candidates}",
+                    f"    All species, including unknowns as wrong: {format_ratio(species_before_correct, species_before_total)} -> {format_ratio(species_after_correct, species_after_total)}",
+                    f"    All species, excluding unknown predictions: {format_ratio(species_before_correct_exc, species_before_total_exc)} -> {format_ratio(species_after_correct_exc, species_after_total_exc)}",
+                    f"    Elements, including unknowns as wrong: {format_ratio(element_before_correct, element_before_total)} -> {format_ratio(element_after_correct, element_after_total)}",
+                    f"    Elements, excluding unknown predictions: {format_ratio(element_before_correct_exc, element_before_total_exc)} -> {format_ratio(element_after_correct_exc, element_after_total_exc)}",
+                    f"    Molecules, including unknowns as wrong: {format_ratio(molecule_before_correct, molecule_before_total)} -> {format_ratio(molecule_after_correct, molecule_after_total)}",
+                    f"    Molecules, excluding unknown predictions: {format_ratio(molecule_before_correct_exc, molecule_before_total_exc)} -> {format_ratio(molecule_after_correct_exc, molecule_after_total_exc)}",
+                    f"    Net molecule-correct gain: +{molecule_after_correct - molecule_before_correct}",
+                    f"    Net element-correct change: {element_after_correct - element_before_correct:+d}",
+                ]
+            )
+        else:
+            lines.append("    No *_diagnostics.csv found in the results directory, so the before/after rescue comparison could not be added.")
         lines.extend(
             [
-                "  Step 4: Molecule rescue on element-labeled peaks.",
-                f"    Element-labeled peaks considered by molecule-only RF rescue: {considered}",
-                f"    Accepted hard molecule overrides: {overrides}",
-                f"    Accepted mixed element/molecule candidates: {mixed_candidates}",
-                f"    All species, including unknowns as wrong: {format_ratio(species_before_correct, species_before_total)} -> {format_ratio(species_after_correct, species_after_total)}",
-                f"    All species, excluding unknown predictions: {format_ratio(species_before_correct_exc, species_before_total_exc)} -> {format_ratio(species_after_correct_exc, species_after_total_exc)}",
-                f"    Elements, including unknowns as wrong: {format_ratio(element_before_correct, element_before_total)} -> {format_ratio(element_after_correct, element_after_total)}",
-                f"    Elements, excluding unknown predictions: {format_ratio(element_before_correct_exc, element_before_total_exc)} -> {format_ratio(element_after_correct_exc, element_after_total_exc)}",
-                f"    Molecules, including unknowns as wrong: {format_ratio(molecule_before_correct, molecule_before_total)} -> {format_ratio(molecule_after_correct, molecule_after_total)}",
-                f"    Molecules, excluding unknown predictions: {format_ratio(molecule_before_correct_exc, molecule_before_total_exc)} -> {format_ratio(molecule_after_correct_exc, molecule_after_total_exc)}",
-                f"    Net molecule-correct gain: +{molecule_after_correct - molecule_before_correct}",
-                f"    Net element-correct change: {element_after_correct - element_before_correct:+d}",
                 "",
-                "  Step 5: Final top-2 classification after mixed element/molecule assignments.",
+                f"  Step 5: Final top-{rf_accuracy_top_n} classification after mixed element/molecule assignments.",
                 f"    All species, including unknowns as wrong: {format_ratio(species_after_correct, species_after_total)}",
                 f"    All species, excluding unknown predictions: {format_ratio(species_after_correct_exc, species_after_total_exc)}",
                 f"    Elements, including unknowns as wrong: {format_ratio(element_after_correct, element_after_total)}",
@@ -423,11 +469,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results_dir", required=True)
     parser.add_argument("--output", default=None)
+    parser.add_argument("--rf_accuracy_top_n", type=int, default=None,
+                        help="Number of RF candidates used for final correctness (default: read from effective config).")
     args = parser.parse_args()
 
     results_dir = Path(args.results_dir)
     output = Path(args.output) if args.output else results_dir / "element_molecule_prediction_type_audit_summary.txt"
-    output.write_text(build_summary(results_dir))
+    output.write_text(build_summary(results_dir, args.rf_accuracy_top_n))
     print(output)
 
 
