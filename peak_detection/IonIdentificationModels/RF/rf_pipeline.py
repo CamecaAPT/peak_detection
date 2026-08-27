@@ -56,8 +56,8 @@ def flat_rf_kwargs(cfg: dict) -> dict:
         mc_max=ranging.get("mc_max", 307.2),
         # Training
         training_path=training.get("training_path"),
-        training_num_files=training.get("training_num_files", 10000),
-        augment_molecule_training_charge_ratios=training.get("augment_molecule_training_charge_ratios", False),
+        training_num_files=training.get("training_num_files", 5000),
+        augment_molecule_training_charge_ratios=training.get("augment_molecule_training_charge_ratios", True),
         include_molecules=training.get("include_molecules", False),
         use_neighborhood=training.get("use_neighborhood", False),
         neighbor_threshold=training.get("neighbor_threshold", 2.0),
@@ -66,11 +66,11 @@ def flat_rf_kwargs(cfg: dict) -> dict:
         flag_unknowns=unknown_flagging.get("flag_unknowns", True),
         mc_threshold=unknown_flagging.get("mc_threshold", 0.2),
         unknown_confidence_threshold=unknown_flagging.get("unknown_confidence_threshold", 0.6),
-        rf_accuracy_top_n=unknown_flagging.get("rf_accuracy_top_n", 1),
+        rf_accuracy_top_n=unknown_flagging.get("rf_accuracy_top_n", 2),
         unknown_mixed_element_molecule_confidence_threshold=mixed_unknown.get(
             "unknown_mixed_element_molecule_confidence_threshold", 0.95),
         # Context rescoring
-        context_rescore=context_rescore.get("enabled", False),
+        context_rescore=context_rescore.get("enabled", True),
         context_window_da=context_rescore.get("context_window_da", 2.0),
         context_strength=context_rescore.get("context_strength", 0.35),
         context_min_confidence=context_rescore.get("context_min_confidence", 0.75),
@@ -80,12 +80,12 @@ def flat_rf_kwargs(cfg: dict) -> dict:
         context_rescue_unknown_same_label=context_rescore.get("context_rescue_unknown_same_label", True),
         context_rescue_unknown_min_score=context_rescore.get("context_rescue_unknown_min_score", 0.7),
         # Molecule rescue / second-pass molecule RF
-        molecule_rf_rescue_elements=molecule_rescue_cfg.get("enabled", False),
+        molecule_rf_rescue_elements=molecule_rescue_cfg.get("enabled", True),
         molecule_rf_rescue_threshold=molecule_rescue_cfg.get("molecule_rf_rescue_threshold", 0.8),
         molecule_rf_rescue_margin=molecule_rescue_cfg.get("molecule_rf_rescue_margin", 0.15),
         molecule_rf_rescue_score_margin=molecule_rescue_cfg.get("molecule_rf_rescue_score_margin", 0.05),
         molecule_rf_rescue_dist_margin=molecule_rescue_cfg.get("molecule_rf_rescue_dist_margin", 0.05),
-        unknown_molecule_rf=unknown_molecule_rf.get("enabled", False),
+        unknown_molecule_rf=unknown_molecule_rf.get("enabled", True),
         unknown_molecule_rf_threshold=unknown_molecule_rf.get("unknown_molecule_rf_threshold", 0.8),
     )
 

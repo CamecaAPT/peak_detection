@@ -121,9 +121,9 @@ def process_dataset(
     # NOTE: keyword defaults below mirror configs/models/rf.yaml (the single source of
     # truth used by the CLI in main()); keep them in sync if it changes.
     training_path: str = 'peak_detection/IonIdentificationModels/training_data/NewData_truthcoverage_lightmol1p_C3_BO_C2O_2p_2026-06-10/Data0001',
-    training_num_files: int = 10000,
-    augment_molecule_training_charge_ratios: bool = False,
-    molecule_rf_rescue_elements: bool = False,
+    training_num_files: int = 5000,
+    augment_molecule_training_charge_ratios: bool = True,
+    molecule_rf_rescue_elements: bool = True,
     molecule_rf_rescue_threshold: float = 0.8,
     molecule_rf_rescue_margin: float = 0.15,
     molecule_rf_rescue_score_margin: float = 0.05,
@@ -133,15 +133,15 @@ def process_dataset(
     use_neighborhood: bool = False,
     neighbor_threshold: float = 2.0,
     use_signature: bool = False,
-    unknown_molecule_rf: bool = False,
+    unknown_molecule_rf: bool = True,
     unknown_molecule_rf_threshold: float = 0.8,
     # Unknown flagging
     flag_unknowns: bool = True,
     mc_threshold: float = 0.2,
     unknown_confidence_threshold: float = 0.6,
-    rf_accuracy_top_n: int = 1,
+    rf_accuracy_top_n: int = 2,
     # Context rescoring
-    context_rescore: bool = False,
+    context_rescore: bool = True,
     context_window_da: float = 2.0,
     context_strength: float = 0.35,
     context_min_confidence: float = 0.75,

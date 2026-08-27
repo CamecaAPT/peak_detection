@@ -5,7 +5,7 @@ internal stage to report — deleting this folder removes it along with the rest
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 
 @dataclass
@@ -66,20 +66,4 @@ class RFRescueDiagnostics:
 
     def to_row(self) -> dict:
         """Flatten to a flat dict of CSV-writable columns (the ApproachDiagnostics contract)."""
-        return {
-            'species_total_before': self.species_total_before,
-            'species_correct_before': self.species_correct_before,
-            'elemental_total_before': self.elemental_total_before,
-            'elemental_correct_before': self.elemental_correct_before,
-            'molecular_total_before': self.molecular_total_before,
-            'molecular_correct_before': self.molecular_correct_before,
-            'species_total_before_exc': self.species_total_before_exc,
-            'species_correct_before_exc': self.species_correct_before_exc,
-            'elemental_total_before_exc': self.elemental_total_before_exc,
-            'elemental_correct_before_exc': self.elemental_correct_before_exc,
-            'molecular_total_before_exc': self.molecular_total_before_exc,
-            'molecular_correct_before_exc': self.molecular_correct_before_exc,
-            'molecule_rescue_considered': self.molecule_rescue_considered,
-            'molecule_rescue_overrides': self.molecule_rescue_overrides,
-            'molecule_rescue_mixed_candidates': self.molecule_rescue_mixed_candidates,
-        }
+        return asdict(self)
