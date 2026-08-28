@@ -1,12 +1,12 @@
 """
-detect_peaks_gg2.py — Clean CLI/notebook entry point for peak detection.
+detect_peaks_refactor.py — Clean CLI/notebook entry point for peak detection.
 
 Usage:
     # Single dataset
-    python detect_peaks_gg2.py --apt_path singletest --rrng_path RRNG_test
+    python detect_peaks_refactor.py --apt_path singletest --rrng_path RRNG_test
 
     # Callable from Python
-    from detect_peaks_gg2 import process_dataset
+    from detect_peaks_refactor import process_dataset
     stats = process_dataset('data.csv', 'data.RRNG')
 """
 
