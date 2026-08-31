@@ -13,11 +13,12 @@ peak_detection/
 ├── detect_peaks_headless.py       # CLI: production inference (writes .rrng, no plots)
 ├── detect_peaks_refactor.py       # CLI: evaluation/benchmarking (range file is ground truth)
 ├── RUN_CONFIG.md                  # Full config/CLI reference (flags, --config overrides, output paths)
+├── docs/TOC.md                    # Per-script docs index (every run script + its args)
+├── scripts/                       # One-off/maintenance CLI scripts (synthetic data, migrations, review tools)
 ├── configs/
 │   └── models/
 │       └── rf.yaml                # Self-contained RF model config (ranging + training + guardrails)
 ├── data/                          # Sample APT/RRNG test data
-├── tests/                         # Unit tests (guardrail.py, molecule_rescue.py, yolo_detection.py)
 └── peak_detection/                # Main package
     ├── yolo_detection.py          # Model-agnostic YOLO1D peak ranging (run_yolo_ranging)
     ├── models.py                  # PeakRange, DetailedId, DatasetStats dataclasses
@@ -33,7 +34,7 @@ peak_detection/
     │   │   ├── rf_model.py          # Underlying RF train/infer implementation
     │   │   ├── rf_pipeline.py       # RFClassifierPipeline orchestrator
     │   │   └── molecule_rescue.py   # RF-specific molecule-rescue guardrails
-    │   └── KDE/                    # KDE-based classifier
+    │   └── Ionclassifier/           # RNN-based species classifier (not currently wired into --model)
     └── RangingModels/
         └── RangingNN/               # YOLO1D ranging model, weights, and predictor
 ```
@@ -41,7 +42,7 @@ peak_detection/
 ### Command-line interface
 
 ---
-Two entry points share one parameter system — see [`RUN_CONFIG.md`](RUN_CONFIG.md) for the full reference (config resolution order, output-directory rules, script-specific flags).
+Two entry points share one parameter system — see [`docs/TOC.md`](docs/TOC.md) for a per-script doc of every run script in the repo (usage + full argument reference), including the maintenance/data-generation scripts under `scripts/`.
 
 **`detect_peaks_refactor.py`** — evaluation/benchmarking (the range file is treated as ground truth; emits metrics, plots, batch summaries):
 ```powershell
@@ -61,7 +62,7 @@ Two entry points share one parameter system — see [`RUN_CONFIG.md`](RUN_CONFIG
 .venv\Scripts\python.exe detect_peaks_headless.py `
     --input "data\APT_test\R13_40310Zr Unsaved - Top Level ROI.csv" `
     --elements "Zr,O,Ti,ZrO,ZrH" `
-    --output-rrng "out\R13_predicted.rrng"
+    --output-rrng "results\R13_predicted.rrng"
 ```
 
 No per-model tunables (`--iou`, `--conf`, etc.) exist as flags on either script — model behavior comes entirely from `configs\models\<model>.yaml`, overridable per run via `--config`.

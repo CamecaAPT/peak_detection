@@ -191,7 +191,7 @@ cython_debug/
 /baseline_after/
 
 # superpowers skill working files (specs/plans docs + SDD scratch workspace)
-/docs/
+/docs/superpowers/
 /.superpowers/
 
 # RangingNN augmented training data (large, regenerated locally via run_train.py)
