@@ -17,15 +17,8 @@ import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESOURCE_DIR = REPO_ROOT / "scripts" / "synthetic_resources"
-DEFAULT_RESULTS_DIR = REPO_ROOT / "results_summary_2026-06-09_context_top1_cleantruth_rerun"
-DEFAULT_OUTPUT_DIR = (
-    REPO_ROOT
-    / "peak_detection"
-    / "IonIdentificationModels"
-    / "training_data"
-    / "NewData_truthcoverage_2026-06-09"
-    / "Data0001"
-)
+TRAINING_DATA_DIR = REPO_ROOT / "peak_detection" / "IonIdentificationModels" / "training_data"
+DEFAULT_OUTPUT_NAME = "NewData"
 
 BACKGROUND_COMPONENTS = [
     {"composition": {"H": 0.667, "O": 0.333}, "min_pct": 0.01, "max_pct": 0.05},
@@ -223,7 +216,11 @@ def load_isotope_abundances() -> pd.DataFrame:
 
 def load_truth_elements(results_dir: Path, valid_elements: set[str]) -> set[str]:
     elements: set[str] = set()
-    for path in results_dir.glob("*/*_true_species.txt"):
+    paths = list(results_dir.glob("*/*_true_species.txt"))
+    merged_path = results_dir / "merged_true_species.txt"
+    if merged_path.exists():
+        paths.append(merged_path)
+    for path in paths:
         for line in path.read_text().splitlines():
             label = line.strip()
             if label in valid_elements and not is_molecule(label):
@@ -569,12 +566,31 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Generate truth-coverage ion classifier training CSVs.")
     parser.add_argument("--num_files", type=int, default=5000)
     parser.add_argument("--seed", type=int, default=20260609)
-    parser.add_argument("--output_dir", type=Path, default=DEFAULT_OUTPUT_DIR)
-    parser.add_argument("--results_dir", type=Path, default=DEFAULT_RESULTS_DIR)
+    parser.add_argument(
+        "--output_name",
+        type=str,
+        default=DEFAULT_OUTPUT_NAME,
+        help="Name of the output folder created under training_data/ (ignored if --output_dir is set).",
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=Path,
+        default=None,
+        help="Directory for generated Data0001/*.csv files; defaults to training_data/<output_name>/Data0001.",
+    )
+    parser.add_argument(
+        "--results_dir",
+        type=Path,
+        default=RESOURCE_DIR,
+        help="Directory containing the truth summary CSVs/species files used to build coverage compositions "
+             "(default: scripts/synthetic_resources, built via build_truth_molecule_summary.py).",
+    )
     parser.add_argument(
         "--existing_training_dir",
         type=Path,
-        default=REPO_ROOT / "peak_detection/IonIdentificationModels/training_data/NewData_peakshift0_noise0_newchg/Data0001",
+        default=None,
+        help="Prior training dataset to scan for extra molecule labels to carry forward "
+             "(default: none, i.e. only molecules from --results_dir are used).",
     )
     parser.add_argument("--peak_shift", type=int, default=5)
     parser.add_argument("--noise", type=float, default=10.0)
@@ -595,6 +611,8 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
+    if args.output_dir is None:
+        args.output_dir = TRAINING_DATA_DIR / args.output_name / "Data0001"
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -606,7 +624,11 @@ def main() -> None:
 
     truth_molecule_labels = load_truth_molecules(args.results_dir)
     truth_elements = load_truth_elements(args.results_dir, valid_elements)
-    existing_molecule_labels = load_existing_training_molecules(args.existing_training_dir, limit_files=5000)
+    existing_molecule_labels = (
+        load_existing_training_molecules(args.existing_training_dir, limit_files=5000)
+        if args.existing_training_dir is not None
+        else {}
+    )
     label_by_canonical = dict(existing_molecule_labels)
     label_by_canonical.update(truth_molecule_labels)
 
@@ -653,7 +675,7 @@ def main() -> None:
         if (idx + 1) % 500 == 0:
             print(f"Generated {idx + 1}/{args.num_files} files")
 
-    charges.to_csv(args.output_dir.parent / "MostCommonChargeState_truthcoverage_2026-06-09.csv", index=False)
+    charges.to_csv(args.output_dir.parent / "MostCommonChargeState.csv", index=False)
 
     coverage_summary = summarize_output(args.output_dir, truth_molecules, args.num_files)
     coverage_summary.to_csv(args.output_dir.parent / "truth_molecule_coverage_summary.csv", index=False)
@@ -668,7 +690,7 @@ def main() -> None:
         f"seed = {args.seed}",
         f"output_dir = {args.output_dir}",
         f"results_dir = {args.results_dir}",
-        f"existing_training_dir = {args.existing_training_dir}",
+        f"existing_training_dir = {args.existing_training_dir if args.existing_training_dir is not None else 'none'}",
         f"truth_element_count = {len(truth_elements)}",
         f"truth_molecule_count = {len(truth_molecules)}",
         f"molecule_formula_count_used_for_generation = {len(molecule_formulas)}",
