@@ -193,3 +193,7 @@ cython_debug/
 # superpowers skill working files (specs/plans docs + SDD scratch workspace)
 /docs/
 /.superpowers/
+
+# RangingNN augmented training data (large, regenerated locally via run_train.py)
+/peak_detection/RangingModels/RangingNN/training_data/*
+!/peak_detection/RangingModels/RangingNN/training_data/.gitkeep
