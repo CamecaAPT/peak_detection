@@ -10,7 +10,7 @@ setup(
     include_package_data=True,
     package_data={
         # If you have non-Python files, specify them here:
-        '': ['*.yaml', '*.pt', '*.csv', '*.tar']
+        '': ['*.yaml', '*.pt', '*.csv', '*.tar', '*.json']
     },
     url='https://github.com/wdwzyyg/peak_detection.git',
     license='MIT',
@@ -20,8 +20,7 @@ setup(
     # keywords=[],
     install_requires=[
         "torch==2.1.2",  # keep at 2.1.2 for euler cluser
-        "torchvision==0.16.2",
-        "numpy==1.23.5",
+        "numpy==1.23.5",  # pinned for compatibility with torch==2.1.2 and apav
         "matplotlib",
         "scikit-image",
         "scikit-learn==1.6.1",
@@ -30,6 +29,7 @@ setup(
         "pandas",
         "tqdm",
         "pyyaml",
+        "scipy",
     ],
 
 )

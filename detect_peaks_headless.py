@@ -43,23 +43,22 @@ if current_dir not in sys.path:
 from peak_detection.data_io import (
     load_apt_from_file,
     parse_rrng,
-    extract_elements_from_rrng,
     save_rrng,
+        save_rrng_with_uncertainty as write_rrng_with_uncertainty,
 )
-from peak_detection.yolo_detection import predict_peak_ranges_yolo
 from peak_detection.training import set_progress_min_fraction
-from peak_detection.run_config import (
-    add_shared_args,
-    apply_config_defaults,
-    config_from_namespace,
-    write_run_config,
-)
+from peak_detection.registry import get_pipeline, get_flattener, list_models
+from peak_detection.registry.base import ClassifierContext
+from peak_detection.registry.config import load_merged_config, write_effective_config
+
+CONFIGS_DIR = os.path.join(current_dir, "configs")
 
 # Script-specific tunables (beyond the shared RunConfig) that are persisted to / loadable
 # from the run-config YAML. Per-run I/O paths and expected-species inputs are deliberately
 # omitted (those change every run and the `command` header records them).
-SCRIPT_CONFIG_KEYS = ['save_artifacts', 'save_peak_ranges_txt',
-                      'separate_molecule_rf', 'progress_min_fraction']
+SCRIPT_CONFIG_KEYS = [
+    'save_artifacts', 'save_peak_ranges_txt', 'save_rrng_with_uncertainty', 'progress_min_fraction'
+]
 
 
 def _resolve_expected_species(elements=None, expected_rrng=None):
@@ -69,13 +68,13 @@ def _resolve_expected_species(elements=None, expected_rrng=None):
     Exactly one source is used:
       - `elements`: an explicit list (or comma-separated string) of species. May
         mix elements and molecules (e.g. ['Zr', 'O', 'ZrO']). Base elements are
-        derived from these inside predict_peak_ranges_yolo.
+        derived from these inside RFClassifierPipeline.run().
       - `expected_rrng`: a range file whose labels define the species list and
         whose decomposed symbols define the base elements (same as the RRNG path
         in the original script).
 
     Returns (species_list, elements_list). Either may be None, meaning "let
-    predict_peak_ranges_yolo derive it".
+    the classifier pipeline derive it".
     """
     if elements is not None:
         if isinstance(elements, str):
@@ -89,11 +88,10 @@ def _resolve_expected_species(elements=None, expected_rrng=None):
     if expected_rrng is not None:
         if not os.path.exists(expected_rrng):
             raise FileNotFoundError(f"Expected-species range file not found: {expected_rrng}")
-        truth = parse_rrng(expected_rrng)
+        truth, elements_list = parse_rrng(expected_rrng)
         species = sorted({str(t.label) for t in truth if t.label and t.label != 'Unknown'})
         if not species:
             raise ValueError(f"No usable species labels parsed from {expected_rrng}.")
-        elements_list = extract_elements_from_rrng(expected_rrng)
         return species, elements_list
 
     raise ValueError("Provide expected species via either `elements` or `expected_rrng`.")
@@ -103,6 +101,7 @@ def detect_peaks_headless(
     input_file: str,
     output_rrng: str,
     *,
+    model: str = 'rf',
     # Expected species (exactly one of these)
     elements=None,
     expected_rrng: str = None,
@@ -110,22 +109,19 @@ def detect_peaks_headless(
     artifacts_dir: str = None,
     save_artifacts: bool = False,
     save_peak_ranges_txt: bool = False,
+    save_rrng_with_uncertainty: bool = False,
     # YOLO parameters
     yolo_weights: str = 'best_v0_2026-06-23.pt',
-    n_iter: int = 0,
     iou: float = 0.01,
     conf: float = 0.05,
     max_det: int = 2000,
-    iter_min_intensity_quantile: float = 0.10,
-    iter_min_intensity_fraction: float = 0.50,
-    iter_intensity_stat_quantile: float = 0.90,
     mc_min: float = 0.0,
     mc_max: float = 307.2,
     # RF parameters
     training_path: str = None,
-    training_num_files: int = 10000,
-    augment_molecule_training_charge_ratios: bool = False,
-    molecule_rf_rescue_elements: bool = False,
+    training_num_files: int = 5000,
+    augment_molecule_training_charge_ratios: bool = True,
+    molecule_rf_rescue_elements: bool = True,
     molecule_rf_rescue_threshold: float = 0.8,
     molecule_rf_rescue_margin: float = 0.15,
     molecule_rf_rescue_score_margin: float = 0.05,
@@ -135,20 +131,17 @@ def detect_peaks_headless(
     use_neighborhood: bool = False,
     neighbor_threshold: float = 2.0,
     use_signature: bool = False,
-    separate_molecule_rf: bool = False,
-    unknown_molecule_rf: bool = False,
+    unknown_molecule_rf: bool = True,
     unknown_molecule_rf_threshold: float = 0.8,
-    followon_mc_vector_rf: bool = False,
-    followon_mc_vector_round_decimals: int = 3,
     # Unknown flagging
     flag_unknowns: bool = True,
     mc_threshold: float = 0.2,
     unknown_confidence_threshold: float = 0.6,
-    rf_accuracy_top_n: int = 1,
+    rf_accuracy_top_n: int = 2,
     # Progress reporting
     progress_min_fraction: float = None,
     # Context rescoring
-    context_rescore: bool = False,
+    context_rescore: bool = True,
     context_window_da: float = 2.0,
     context_strength: float = 0.35,
     context_min_confidence: float = 0.75,
@@ -189,54 +182,44 @@ def detect_peaks_headless(
     if not artifacts_dir:
         artifacts_dir = os.path.dirname(os.path.abspath(output_rrng))
 
-    detected, _, _rf_acc, _rf_acc_ele, _unknown_count = predict_peak_ranges_yolo(
-        input_file, spectrum_log, x, None,  # rrng_file=None -> no truth/eval
-        n_iter=n_iter, prefix=prefix,
-        flag_unknowns=flag_unknowns,
-        mc_threshold=mc_threshold,
-        training_path=training_path,
-        training_num_files=training_num_files,
+    cfg = dict(
+        yolo_weights=yolo_weights, iou=iou, conf=conf, max_det=max_det, mc_min=mc_min, mc_max=mc_max,
+        training_path=training_path, training_num_files=training_num_files,
         augment_molecule_training_charge_ratios=augment_molecule_training_charge_ratios,
+        include_molecules=include_molecules, use_neighborhood=use_neighborhood,
+        neighbor_threshold=neighbor_threshold, use_signature=use_signature,
+        flag_unknowns=flag_unknowns, mc_threshold=mc_threshold,
+        unknown_confidence_threshold=unknown_confidence_threshold, rf_accuracy_top_n=rf_accuracy_top_n,
+        unknown_mixed_element_molecule_confidence_threshold=unknown_mixed_element_molecule_confidence_threshold,
         molecule_rf_rescue_elements=molecule_rf_rescue_elements,
         molecule_rf_rescue_threshold=molecule_rf_rescue_threshold,
         molecule_rf_rescue_margin=molecule_rf_rescue_margin,
         molecule_rf_rescue_score_margin=molecule_rf_rescue_score_margin,
         molecule_rf_rescue_dist_margin=molecule_rf_rescue_dist_margin,
-        unknown_mixed_element_molecule_confidence_threshold=unknown_mixed_element_molecule_confidence_threshold,
-        include_molecules=include_molecules,
-        yolo_weights=yolo_weights, iou=iou, conf=conf, max_det=max_det,
-        iter_min_intensity_quantile=iter_min_intensity_quantile,
-        iter_min_intensity_fraction=iter_min_intensity_fraction,
-        iter_intensity_stat_quantile=iter_intensity_stat_quantile,
-        mc_min=mc_min, mc_max=mc_max,
-        use_neighborhood=use_neighborhood, neighbor_threshold=neighbor_threshold,
-        use_signature=use_signature,
-        separate_molecule_rf=separate_molecule_rf,
-        unknown_molecule_rf=unknown_molecule_rf,
-        molecule_rf_threshold=unknown_molecule_rf_threshold,
-        unknown_confidence_threshold=unknown_confidence_threshold,
-        rf_accuracy_top_n=rf_accuracy_top_n,
-        context_rescore=context_rescore,
-        context_window_da=context_window_da,
-        context_strength=context_strength,
-        context_min_confidence=context_min_confidence,
+        unknown_molecule_rf=unknown_molecule_rf, unknown_molecule_rf_threshold=unknown_molecule_rf_threshold,
+        context_rescore=context_rescore, context_window_da=context_window_da,
+        context_strength=context_strength, context_min_confidence=context_min_confidence,
         context_min_candidate_confidence=context_min_candidate_confidence,
-        context_override_margin=context_override_margin,
-        context_distance_sigma=context_distance_sigma,
+        context_override_margin=context_override_margin, context_distance_sigma=context_distance_sigma,
         context_rescue_unknown_same_label=context_rescue_unknown_same_label,
         context_rescue_unknown_min_score=context_rescue_unknown_min_score,
-        followon_mc_vector_rf=followon_mc_vector_rf,
-        followon_mc_vector_round_decimals=followon_mc_vector_round_decimals,
-        species_list=species_list,
-        elements_list=elements_list,
-        save_artifacts=save_artifacts,
-        artifacts_dir=artifacts_dir,
     )
+    ctx = ClassifierContext(
+        apt_file=input_file, rrng_file=None, x_exp=x, spectrum_log=spectrum_log,
+        truth_data=[], elements_for_molecules=[],
+        species_list=species_list, elements_list=elements_list,
+        prefix=prefix, artifacts_dir=artifacts_dir, save_artifacts=save_artifacts, cfg=cfg,
+    )
+    get_pipeline(model).run(ctx)
+    detected = ctx.peaks
 
     # --- REQUIRED OUTPUT: range file ---
     out_parent = os.path.dirname(os.path.abspath(output_rrng))
     os.makedirs(out_parent, exist_ok=True)
-    save_rrng(output_rrng, detected)
+    if save_rrng_with_uncertainty:
+        write_rrng_with_uncertainty(output_rrng, detected)
+    else:
+        save_rrng(output_rrng, detected)
     print(f"Output range file written: {output_rrng} ({len(detected)} ranges)")
 
     # --- OPTIONAL: plain-text peak ranges ---
@@ -264,6 +247,8 @@ def main():
                         help="Path to a YAML run-config file. Its values become defaults that "
                              "explicit CLI flags still override. (Required I/O flags must still "
                              "be supplied on the command line.)")
+    parser.add_argument("--model", type=str, default="rf", choices=list_models(),
+                        help="Classification model to use (see configs/models/).")
 
     # I/O
     parser.add_argument("--input", required=True,
@@ -286,45 +271,40 @@ def main():
                         help="Write per-dataset diagnostic CSVs (detailed results, unknown report).")
     parser.add_argument("--save-peak-ranges-txt", action=argparse.BooleanOptionalAction, default=False,
                         help="Also write a plain-text peak_ranges.txt.")
+    parser.add_argument("--save-rrng-with-uncertainty", action=argparse.BooleanOptionalAction, default=False,
+                        help="Write the output RRNG using top-two identification candidates.")
 
-    # Shared YOLO / RF / unknown-flagging / context-rescoring parameters
-    # (single source of truth: peak_detection/run_config.py). These accept both
-    # hyphen (e.g. --yolo-weights) and underscore (--yolo_weights) spellings.
-    add_shared_args(parser)
-
-    # Script-specific: molecule-only RF mode (not part of the shared config).
-    parser.add_argument("--separate-molecule-rf", "--separate_molecule_rf",
-                        dest="separate_molecule_rf",
-                        action=argparse.BooleanOptionalAction, default=False)
+    # Model tunables (YOLO / RF / unknown-flagging / context-rescoring) come from
+    # configs/models/<model>.yaml <- --config override; no per-model CLI flags
+    # (single source of truth: the configs/ folder).
 
     # Progress reporting
     parser.add_argument("--progress-min-fraction", type=float, default=None,
                         help="Throttle training-data progress bars to ~one update per this "
                              "fraction of progress (e.g. 0.2 = every 20%%). Default: continuous.")
 
-    # Apply --config YAML as defaults (explicit CLI flags still override), then parse.
-    apply_config_defaults(parser)
     args = parser.parse_args()
 
-    cfg = config_from_namespace(args)
-    # Script-specific tunables to persist in the run config (I/O paths + expected-species
-    # inputs are excluded). These load back via --config too. The YAML is written into the
-    # output range file's directory so it sits alongside the result.
-    write_run_config(cfg, extra={k: getattr(args, k) for k in SCRIPT_CONFIG_KEYS},
-                     directory=os.path.dirname(os.path.abspath(args.output_rrng)))
+    cfg = load_merged_config(args.model, configs_dir=CONFIGS_DIR, override_path=args.config)
+    # Script-specific tunables to persist alongside the effective config (I/O paths + expected-
+    # species inputs are excluded). These load back via --config too. The YAML is written into
+    # the output range file's directory so it sits alongside the result.
+    write_effective_config(cfg, extra={k: getattr(args, k) for k in SCRIPT_CONFIG_KEYS},
+                           directory=os.path.dirname(os.path.abspath(args.output_rrng)))
 
     try:
         detect_peaks_headless(
             args.input,
             args.output_rrng,
+            model=args.model,
             elements=args.elements,
             expected_rrng=args.expected_rrng,
             artifacts_dir=args.artifacts_dir,
             save_artifacts=args.save_artifacts,
             save_peak_ranges_txt=args.save_peak_ranges_txt,
-            separate_molecule_rf=args.separate_molecule_rf,
+            save_rrng_with_uncertainty=args.save_rrng_with_uncertainty,
             progress_min_fraction=args.progress_min_fraction,
-            **cfg.to_kwargs(),
+            **get_flattener(args.model)(cfg),
         )
     except (ValueError, FileNotFoundError, RuntimeError) as e:
         print(f"Error: {e}")

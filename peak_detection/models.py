@@ -3,13 +3,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 
 
+@runtime_checkable
+class ApproachDiagnostics(Protocol):
+    """Contract for an approach's own optional, internal diagnostics (e.g. RF's
+    before/after molecule-rescue snapshot). Plugged into DatasetStats.extras rather than
+    living as fields on the shared dataclass, so approaches without an equivalent internal
+    stage (IonClassifier, a single combined model, ...) simply leave extras=None instead of
+    carrying dead fields that only one approach ever populates."""
+
+    def to_row(self) -> dict:
+        """Flatten this approach's diagnostics into a flat dict of CSV-writable columns."""
+        ...
+
+
 @dataclass
 class DetailedId:
-    """RF model's top-2 predictions for a peak."""
+    """An identification model's top-2 candidate labels for a peak."""
     el1: str = ''
     conf1: float = 0.0
     el2: str = ''
@@ -44,36 +58,20 @@ class DatasetStats:
     true_max_mc: float = 0.0
     pred_min_mc: float = 0.0
     pred_max_mc: float = 0.0
-    rf_accuracy: float = 0.0
-    rf_accuracy_ele: float = 0.0
-    rf_species_total: int = 0
-    rf_species_correct: int = 0
-    rf_elemental_total: int = 0
-    rf_elemental_correct: int = 0
-    rf_molecular_total: int = 0
-    rf_molecular_correct: int = 0
-    rf_species_total_exc: int = 0
-    rf_species_correct_exc: int = 0
-    rf_elemental_total_exc: int = 0
-    rf_elemental_correct_exc: int = 0
-    rf_molecular_total_exc: int = 0
-    rf_molecular_correct_exc: int = 0
-    # Optional: metrics before molecule-rescue overrides are applied
-    rf_species_total_before: int = 0
-    rf_species_correct_before: int = 0
-    rf_elemental_total_before: int = 0
-    rf_elemental_correct_before: int = 0
-    rf_molecular_total_before: int = 0
-    rf_molecular_correct_before: int = 0
-    rf_species_total_before_exc: int = 0
-    rf_species_correct_before_exc: int = 0
-    rf_elemental_total_before_exc: int = 0
-    rf_elemental_correct_before_exc: int = 0
-    rf_molecular_total_before_exc: int = 0
-    rf_molecular_correct_before_exc: int = 0
-    molecule_rescue_considered: int = 0
-    molecule_rescue_overrides: int = 0
-    molecule_rescue_mixed_candidates: int = 0
+    species_accuracy: float = 0.0
+    elemental_accuracy: float = 0.0
+    species_total: int = 0
+    species_correct: int = 0
+    elemental_total: int = 0
+    elemental_correct: int = 0
+    molecular_total: int = 0
+    molecular_correct: int = 0
+    species_total_exc: int = 0
+    species_correct_exc: int = 0
+    elemental_total_exc: int = 0
+    elemental_correct_exc: int = 0
+    molecular_total_exc: int = 0
+    molecular_correct_exc: int = 0
     unknown_count: int = 0
     unknown_count_with_truth: int = 0
     unknown_count_no_truth: int = 0
@@ -84,3 +82,8 @@ class DatasetStats:
     x: np.ndarray | None = None
     spectrum: np.ndarray | None = None
     truth: list = field(default_factory=list)
+    # Optional per-approach diagnostics (e.g. RF's before/after molecule-rescue snapshot).
+    # None for approaches with no equivalent internal stage. Never written into the
+    # universal peak_detection_summary.csv; an approach that populates this is expected to
+    # write its own side-channel CSV (extras.to_row(), merged with this row's own fields).
+    extras: ApproachDiagnostics | None = None

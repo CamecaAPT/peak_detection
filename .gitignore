@@ -1,5 +1,4 @@
 # Byte-compiled / optimized / DLL files
-__pycache__/
 *.py[cod]
 *$py.class
 
@@ -172,7 +171,29 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
-**/__pycache__/*
-/.vscode/**
+
+# Byte-compiled caches (any nested location)
+**/__pycache__/
+
+# Jupyter checkpoints (any nested location)
+**/.ipynb_checkpoints/
+
+# Editors
+.vscode/
 /.idea/apt.iml
 /.idea/**
+
+# macOS
+**/.DS_Store
+
+# Scratch verification output for docs/superpowers/plans refactor tasks
+/baseline_before/
+/baseline_after/
+
+# superpowers skill working files (specs/plans docs + SDD scratch workspace)
+/docs/superpowers/
+/.superpowers/
+
+# RangingNN augmented training data (large, regenerated locally via run_train.py)
+/peak_detection/RangingModels/RangingNN/training_data/*
+!/peak_detection/RangingModels/RangingNN/training_data/.gitkeep
